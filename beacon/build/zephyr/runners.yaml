@@ -12,7 +12,7 @@ debug-runner: jlink
 
 # Common runner configuration values.
 config:
-  board_dir: E:/2023/WePower/WePowerBeacon/beacon/boards/arm/wp_rev1
+  board_dir: D:/WePowerBeacon/beacon/boards/arm/wp_rev1
   # Build outputs:
   elf_file: zephyr.elf
   hex_file: zephyr.hex

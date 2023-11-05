@@ -39,6 +39,6 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("E:/2023/WePower/WePowerBeacon/beacon/build/modules/nrf/subsys/net/lib/cmake_install.cmake")
+  include("D:/WePowerBeacon/beacon/build/modules/nrf/subsys/net/lib/cmake_install.cmake")
 endif()
 

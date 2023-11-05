@@ -2230,9 +2230,9 @@ C:\ncs\v2.4.2\zephyr\subsys\usb\device_next\class\Kconfig.template.instances_cou
 C:\ncs\v2.4.2\zephyr\subsys\usb\host\Kconfig
 C:\ncs\v2.4.2\zephyr\subsys\usb\usb_c\Kconfig
 C:\ncs\v2.4.2\zephyr\subsys\zbus\Kconfig
-E:\2023\WePower\WePowerBeacon\beacon\boards\arm\wp_rev1\Kconfig.board
-E:\2023\WePower\WePowerBeacon\beacon\boards\arm\wp_rev1\Kconfig.defconfig
-E:\2023\WePower\WePowerBeacon\beacon\build\Kconfig\Kconfig.dts
-E:\2023\WePower\WePowerBeacon\beacon\build\Kconfig\Kconfig.modules
-E:\2023\WePower\WePowerBeacon\beacon\build\Kconfig\Kconfig.shield
-E:\2023\WePower\WePowerBeacon\beacon\build\Kconfig\Kconfig.shield.defconfig
+D:\WePowerBeacon\beacon\boards\arm\wp_rev1\Kconfig.board
+D:\WePowerBeacon\beacon\boards\arm\wp_rev1\Kconfig.defconfig
+D:\WePowerBeacon\beacon\build\Kconfig\Kconfig.dts
+D:\WePowerBeacon\beacon\build\Kconfig\Kconfig.modules
+D:\WePowerBeacon\beacon\build\Kconfig\Kconfig.shield
+D:\WePowerBeacon\beacon\build\Kconfig\Kconfig.shield.defconfig

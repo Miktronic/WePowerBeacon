@@ -1,7 +1,7 @@
 # 0 "C:/ncs/v2.4.2/zephyr/misc/empty_file.c"
 # 0 "<built-in>"
 # 0 "<command-line>"
-# 1 "E:/2023/WePower/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts" 1
+# 1 "D:/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts" 1
 
 
 
@@ -685,7 +685,7 @@
   compatible = "nordic,nRF52840-QIAA", "nordic,nRF52840", "nordic,nRF52", "simple-bus";
  };
 };
-# 6 "E:/2023/WePower/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts" 2
+# 6 "D:/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts" 2
 
 / {
  model = "WP-Rev1";
@@ -754,7 +754,7 @@
    label = "image-scratch";
    reg = <0x000da000 0x0001e000>;
   };
-# 84 "E:/2023/WePower/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts"
+# 84 "D:/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts"
   storage_partition: partition@f8000 {
    label = "storage";
    reg = <0x000f8000 0x00008000>;

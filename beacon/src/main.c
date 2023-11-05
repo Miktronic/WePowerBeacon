@@ -35,21 +35,24 @@
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
 
 #define MANUF_DATA_CUSTOM_START_INDEX   2
-#define PAYLOAD_PACKET_COUNTER_INDEX    18
+#define PAYLOAD_FRAME_COUNTER_INDEX     18
 #define PAYLOAD_DEVICE_ID_INDEX         19
 #define PAYLOAD_STATUS_BYTE_INDEX       21
 #define PAYLOAD_RFU_BYTE_INDEX          22
 #define PAYLOAD_ENCRYPTION_STATUS_ENC   0
 #define PAYLOAD_ENCRYPTION_STATUS_CLEAR 1
+#define FRAME_LENGTH                    23
 
 #define BLE_ADV_INTERVAL_MIN            (32) // N * 0.625. corresponds to dec. 32; 32*0.625 = 20ms
-#define BLE_ADV_INTERVAL_MAX            (36) // N * 0.625. corresponds to dec. 36; 36*0.625 = 25ms
-#define BLE_ADV_TIMEOUT                 (1)  // N * 10ms for advertiser timeout
+#define BLE_ADV_INTERVAL_MAX            (36) // N * 0.625. corresponds to dec. 36; 36*0.625 = 22.5ms
+#define BLE_ADV_TIMEOUT                 (0)  // N * 10ms for advertiser timeout
 #define BLE_ADV_EVENTS                  (1)
 
-void advertising_timer_handler(struct k_timer *timer);
+static void timer_event_handler(struct k_timer *dummy);
 
-K_TIMER_DEFINE(advertising_timer, advertising_timer_handler, NULL);
+K_TIMER_DEFINE(timer_event, timer_event_handler, NULL);
+
+static struct k_work start_advertising_worker;
 
 static we_power_data_ble_adv_t we_power_data;
 static struct bt_data we_power_adv_data;
@@ -59,20 +62,18 @@ static u16_u8_t device_id;
 
 static struct bt_le_ext_adv *adv;
 
-//                                           |--------- ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ------------ | cnt    id    id  status RFU
-static uint8_t manf_data[23] = { 0x50, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4F};
+//                                        |--------- ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ------------ |  cnt    id    id  status RFU
+static uint8_t manf_data[FRAME_LENGTH] = { 0x50, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4F};
 static struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_NO_BREDR),
-    BT_DATA(BT_DATA_MANUFACTURER_DATA, manf_data, 23),
+    BT_DATA(BT_DATA_MANUFACTURER_DATA, manf_data, FRAME_LENGTH),
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x50, 0x57)
 };
 
 static void adv_sent(struct bt_le_ext_adv *instance,
 		     struct bt_le_ext_adv_sent_info *info)
 {	
-	printk("Advertising stopped. num_sent: %d ", info->num_sent);
-	manf_data[PAYLOAD_PACKET_COUNTER_INDEX] = manf_data[PAYLOAD_PACKET_COUNTER_INDEX]+1;
-	//k_work_submit(&start_advertising_worker);
+	manf_data[PAYLOAD_FRAME_COUNTER_INDEX] = manf_data[PAYLOAD_FRAME_COUNTER_INDEX]+1;
 }
 
 static int create_advertising(void)
@@ -100,7 +101,7 @@ static int create_advertising(void)
 	return 0;
 }
 
-void advertising_timer_handler(struct k_timer *timer)
+void start_advertising(struct K_work *work)
 {
 	int err;
 
@@ -115,8 +116,6 @@ void advertising_timer_handler(struct k_timer *timer)
 		printk("Failed to start advertising set (%d)\n", err);
 		return;
 	}
-
-	printk("Advertiser %p set started\n", adv);
 }
 
 static void bt_ready(void)
@@ -130,13 +129,24 @@ static void bt_ready(void)
 		printk("Advertising failed to create (err %d)\n", err);
 		return;
 	}
-    k_timer_start(&advertising_timer, K_MSEC(20), K_MSEC(20));	
+    
+}
+
+static void timer_event_handler(struct k_timer *dummy)
+{
+    printk("Manufacturer Data: ");
+    for (uint8_t i = 0; i < FRAME_LENGTH; i++){
+        printk("%02X ", manf_data[i]);
+    }
+    printk("\n");
+
+    k_work_submit(&start_advertising_worker);
 }
 void main(void)
 {
     int err;
     printk("Starting WePower gemns BLE Beacon Demo!\n"); 
-    /*
+    
     // Set the ID, we do this in the clear AND encrypted, for verification
     device_id.u16 = DEVICE_ID;
     we_power_data.data_fields.id = device_id;
@@ -223,7 +233,7 @@ void main(void)
     we_power_adv_data.type = BT_DATA_SVC_DATA16;
     we_power_adv_data.data = manf_data;
     we_power_adv_data.data_len = sizeof(manf_data);
-    */
+    
     // Init and run the BLE
 	err = bt_enable(NULL);
 	if (err) {
@@ -232,4 +242,8 @@ void main(void)
 	}
 	
 	bt_ready();
+
+    k_work_init(&start_advertising_worker, start_advertising);
+
+	k_timer_start(&timer_event, K_MSEC(20), K_MSEC(20)); // Start 20ms timer event
 }

@@ -888,7 +888,7 @@ rule C_STATIC_LIBRARY_LINKER__kernel_
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\ncs\toolchains\31f4403e35\opt\bin\cmake.exe --regenerate-during-build -SE:\2023\WePower\WePowerBeacon\beacon -BE:\2023\WePower\WePowerBeacon\beacon\build
+  command = C:\ncs\toolchains\31f4403e35\opt\bin\cmake.exe --regenerate-during-build -SD:\WePowerBeacon\beacon -BD:\WePowerBeacon\beacon\build
   description = Re-running CMake...
   generator = 1
 
