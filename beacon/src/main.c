@@ -152,15 +152,32 @@ void main(void)
     we_power_data.data_fields.id = device_id;
 
     // Get the counter out of fram and increment it
-    uint32_t fram_counter = 0;
-    if(app_fram_service(&fram_counter) == FRAM_SUCCESS)
+    
+    fram_data_t fram_data = {0};
+
+    if(app_fram_service(&fram_data.frame_counter) == FRAM_SUCCESS)
     {
         // Success! Add it to the payload
-        we_power_data.data_fields.fram_counter.u32 = fram_counter;
+        we_power_data.data_fields.fram_counter.u32 = fram_data.frame_counter;
     }
     else
     {
          we_power_data.data_fields.fram_counter.u32 = 0xFFFFFFFF;
+    }
+
+    // initiate the fram data
+    fram_data.serial_number = DEVICE_ID;
+    fram_data.frame_inteval = 20;
+    fram_data.frame_max_limits = 0xffff;
+    fram_data.sleep_min_interval = 100;
+    fram_data.sleep_after_wake = 1000;
+
+    if (app_fram_write_data(&fram_data) != FRAM_SUCCESS){
+        printk("Writing FRAM is failed.\n");
+    }
+
+    if (app_fram_read_data(&fram_data) != FRAM_SUCCESS){
+        printk("Reading FRAM is failed.\n");
     }
     
     // Get the accelerometer data

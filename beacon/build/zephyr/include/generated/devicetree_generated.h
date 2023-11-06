@@ -10677,7 +10677,7 @@
 #define DT_N_S_soc_S_i2c_40003000_PINCTRL_NAME_sleep_IDX_0_PH DT_N_S_pin_controller_S_i2c0_sleep
 
 /* Generic property macros: */
-#define DT_N_S_soc_S_i2c_40003000_P_zephyr_concat_buf_size 16
+#define DT_N_S_soc_S_i2c_40003000_P_zephyr_concat_buf_size 32
 #define DT_N_S_soc_S_i2c_40003000_P_zephyr_concat_buf_size_EXISTS 1
 #define DT_N_S_soc_S_i2c_40003000_P_zephyr_flash_buf_max_size 16
 #define DT_N_S_soc_S_i2c_40003000_P_zephyr_flash_buf_max_size_EXISTS 1

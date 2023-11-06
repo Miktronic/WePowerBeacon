@@ -794,6 +794,7 @@
  pinctrl-0 = <&i2c0_default>;
  pinctrl-1 = <&i2c0_sleep>;
  pinctrl-names = "default", "sleep";
+ zephyr,concat-buf-size = <32>;
 
     accel: lis2dw12@19 {
         compatible = "st,lis2dw12";

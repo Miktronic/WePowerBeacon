@@ -77,6 +77,69 @@ int i2c_read_bytes(const struct device *i2c_dev, uint16_t addr, uint8_t *data, u
 	return i2c_transfer(i2c_dev, &msgs[0], 2, FRAM_I2C_ADDR);
 }
 
+int app_fram_read_data(fram_data_t *dat)
+{
+	int ret;
+
+	const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+
+	if (!device_is_ready(i2c_dev)) {
+		printk("FRAM: I2C Device is not ready.\n");
+		return FRAM_ERROR;
+	}
+    printk("FRAM I2C Init Success!\n");
+
+	ret = i2c_read_bytes(i2c_dev, FRAM_COUNTER_ADDR, dat, sizeof(fram_data_t));
+	if (ret) {
+		printk("Error reading from FRAM! error code (%d)\n", ret);
+		return FRAM_ERROR;
+	} else {
+		printk(">> ------- Reading FRAM Data -------\n");
+		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+		printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", dat->serial_number);
+		printk(">>[FRAM INFO]->Device Type: %d\n", dat->type);
+		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", dat->frame_inteval);
+		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", dat->frame_max_limits);
+		printk(">>[FRAM INFO]->Minimum Sleeping Interval: %d\n", dat->sleep_min_interval);
+		printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", dat->sleep_after_wake);
+		printk(">>[FRAM INFO]->ASCII String: 0x%04X\n", dat->cmd);
+	}
+
+	return FRAM_SUCCESS;
+
+}
+
+int app_fram_write_data(fram_data_t *dat)
+{
+	int ret;
+
+	const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+
+	if (!device_is_ready(i2c_dev)) {
+		printk("FRAM: I2C Device is not ready.\n");
+		return FRAM_ERROR;
+	}
+    printk("FRAM I2C Init Success!\n");
+
+	ret = i2c_write_bytes(i2c_dev, FRAM_COUNTER_ADDR, dat, sizeof(fram_data_t));
+	if (ret) {
+		printk("Error writing from FRAM! error code (%d)\n", ret);
+		return FRAM_ERROR;
+	} else {
+		printk(">> ------- Writing FRAM Data -------\n");
+		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+		printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", dat->serial_number);
+		printk(">>[FRAM INFO]->Device Type: %d\n", dat->type);
+		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", dat->frame_inteval);
+		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", dat->frame_max_limits);
+		printk(">>[FRAM INFO]->Minimum Sleeping Interval: %d\n", dat->sleep_min_interval);
+		printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", dat->sleep_after_wake);
+		printk(">>[FRAM INFO]->ASCII String: 0x%04X\n", dat->cmd);
+	}
+
+	return FRAM_SUCCESS;
+
+}
 int app_fram_service(uint32_t *counter)
 {
     const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));

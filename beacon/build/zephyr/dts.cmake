@@ -163,7 +163,7 @@ set_target_properties(devicetree_target PROPERTIES "DT_REG|/soc/uart@40002000|AD
 set_target_properties(devicetree_target PROPERTIES "DT_REG|/soc/uart@40002000|SIZE" "0x1000;")
 set_target_properties(devicetree_target PROPERTIES "DT_NODE|/soc/i2c@40003000" TRUE)
 set_target_properties(devicetree_target PROPERTIES "DT_NODELABEL|i2c0" "/soc/i2c@40003000")
-set_target_properties(devicetree_target PROPERTIES "DT_PROP|/soc/i2c@40003000|zephyr,concat-buf-size" "16")
+set_target_properties(devicetree_target PROPERTIES "DT_PROP|/soc/i2c@40003000|zephyr,concat-buf-size" "32")
 set_target_properties(devicetree_target PROPERTIES "DT_PROP|/soc/i2c@40003000|zephyr,flash-buf-max-size" "16")
 set_target_properties(devicetree_target PROPERTIES "DT_PROP|/soc/i2c@40003000|reg" "1073754112;4096;")
 set_target_properties(devicetree_target PROPERTIES "DT_PROP|/soc/i2c@40003000|interrupts" "3;1;")
