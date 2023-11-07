@@ -39,21 +39,21 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/drivers/sensor/lis2dw12/cmake_install.cmake")
+  include("D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/lis2dw12/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/drivers/sensor/lps22hh/cmake_install.cmake")
+  include("D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/lps22hh/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/drivers/sensor/nrf5/cmake_install.cmake")
+  include("D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/nrf5/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/drivers/sensor/stmemsc/cmake_install.cmake")
+  include("D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/stmemsc/cmake_install.cmake")
 endif()
 

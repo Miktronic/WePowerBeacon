@@ -1,7 +1,7 @@
 # Generated file that can be used to preload variant images
 set(BOARD "wp_rev1" CACHE INTERNAL "NCS child image controlled")
-set(BOARD_ROOT "e:/2023/wepower/wepowerbeacon/beacon;.;E:/2023/WePower/WePowerBeacon/beacon/.;C:/ncs/v2.4.2/nrf;C:/ncs/v2.4.2/zephyr" CACHE INTERNAL "NCS child image controlled")
-set(CACHED_CONF_FILE "e:/2023/WePower/WePowerBeacon/beacon/prj_logs.conf" CACHE INTERNAL "NCS child image controlled")
+set(BOARD_ROOT "d:/wepowerbeacon/beacon;.;D:/WePowerBeacon/beacon/.;C:/ncs/v2.4.2/nrf;C:/ncs/v2.4.2/zephyr" CACHE INTERNAL "NCS child image controlled")
+set(CACHED_CONF_FILE "d:/WePowerBeacon/beacon/prj_logs.conf" CACHE INTERNAL "NCS child image controlled")
 set(CLI_CONFIG_DEBUG_OPTIMIZATIONS "y" CACHE INTERNAL "NCS child image controlled")
 set(CLI_CONFIG_DEBUG_THREAD_INFO "y" CACHE INTERNAL "NCS child image controlled")
 set(CONF_FILE_BUILD_TYPE "logs" CACHE INTERNAL "NCS child image controlled")
