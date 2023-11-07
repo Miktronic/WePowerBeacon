@@ -20,6 +20,19 @@
         zephyr,entropy = &rng;
         zephyr,i2c = &i2c0;
 	};
+
+	leds {
+		compatible = "gpio-leds";
+		pol_gpio: pol_gpio {
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "Red LED";
+		};
+	};
+
+	aliases {
+		pol = &pol_gpio;
+	};
+
 };
 
 &pinctrl {

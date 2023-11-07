@@ -23,6 +23,7 @@
 #include <zephyr/bluetooth/hci.h>
 #include <stdlib.h>
 #include <math.h>
+#include <zephyr/drivers/gpio.h>
 
 #include "app_types.h"
 #include "app_fram.h"
@@ -47,6 +48,8 @@
 #define BLE_ADV_INTERVAL_MAX            (36) // N * 0.625. corresponds to dec. 36; 36*0.625 = 22.5ms
 #define BLE_ADV_TIMEOUT                 (0)  // N * 10ms for advertiser timeout
 #define BLE_ADV_EVENTS                  (1)
+
+static const struct gpio_dt_spec pol_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(pol), gpios);
 
 static void timer_event_handler(struct k_timer *dummy);
 
@@ -145,6 +148,14 @@ static void timer_event_handler(struct k_timer *dummy)
 void main(void)
 {
     int err;
+
+    err = gpio_pin_configure_dt(&pol_gpio, GPIO_OUTPUT_ACTIVE);
+	if (err < 0) {
+		return 0;
+	}
+    
+    gpio_pin_set_dt(&pol_gpio, 1);
+    
     printk("Starting WePower gemns BLE Beacon Demo!\n"); 
     
     // Set the ID, we do this in the clear AND encrypted, for verification

@@ -1,5 +1,5 @@
 empty_file.o: C:/ncs/v2.4.2/zephyr/misc/empty_file.c \
- D:/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts \
+ E:/2023/WePower/WePowerBeacon/beacon/boards/arm/wp_rev1/wp_rev1.dts \
  C:/ncs/v2.4.2/zephyr/dts/arm/nordic/nrf52840_qiaa.dtsi \
  C:/ncs/v2.4.2/zephyr/dts/common/mem.h \
  C:/ncs/v2.4.2/zephyr/dts/arm/nordic/nrf52840.dtsi \

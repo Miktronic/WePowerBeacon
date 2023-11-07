@@ -19,6 +19,7 @@
 		zephyr,i2c = &i2c0;
 	};
 	aliases {
+		pol = &pol_gpio;
 	};
 	soc {
 		#address-cells = < 0x1 >;
@@ -478,6 +479,7 @@
 			#gpio-cells = < 0x2 >;
 			status = "okay";
 			port = < 0x0 >;
+			phandle = < 0x7 >;
 		};
 		gpio1: gpio@50000300 {
 			compatible = "nordic,nrf-gpio";
@@ -555,5 +557,12 @@
 		generator = < &timer2 >;
 		clock-prescaler = < 0x0 >;
 		#pwm-cells = < 0x3 >;
+	};
+	leds {
+		compatible = "gpio-leds";
+		pol_gpio: pol_gpio {
+			gpios = < &gpio0 0xd 0x0 >;
+			label = "Red LED";
+		};
 	};
 };

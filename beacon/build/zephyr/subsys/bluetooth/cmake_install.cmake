@@ -39,16 +39,16 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/WePowerBeacon/beacon/build/zephyr/subsys/bluetooth/common/cmake_install.cmake")
+  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/subsys/bluetooth/common/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/WePowerBeacon/beacon/build/zephyr/subsys/bluetooth/host/cmake_install.cmake")
+  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/subsys/bluetooth/host/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/WePowerBeacon/beacon/build/zephyr/subsys/bluetooth/lib/cmake_install.cmake")
+  include("E:/2023/WePower/WePowerBeacon/beacon/build/zephyr/subsys/bluetooth/lib/cmake_install.cmake")
 endif()
 
