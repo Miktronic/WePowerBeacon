@@ -251,6 +251,8 @@ void main(void)
 	}
     
     gpio_pin_set_dt(&pol_gpio, 1);
+
+    printk("Trigger POL pin to HIGH Level\n"); 
     
     printk("Starting WePower gemns BLE Beacon Demo!\n"); 
     
