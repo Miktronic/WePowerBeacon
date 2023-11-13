@@ -140,6 +140,53 @@ int app_fram_write_data(fram_data_t *dat)
 	return FRAM_SUCCESS;
 
 }
+
+int app_fram_read_counter(fram_data_t *dat)
+{
+	int ret;
+
+	const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+
+	if (!device_is_ready(i2c_dev)) {
+		printk("FRAM: I2C Device is not ready.\n");
+		return FRAM_ERROR;
+	}
+    printk("FRAM I2C Init Success!\n");
+
+	ret = i2c_read_bytes(i2c_dev, FRAM_COUNTER_ADDR, dat, FRAM_COUNTER_NUM_BYTES);
+	if (ret) {
+		printk("Error reading from FRAM! error code (%d)\n", ret);
+		return FRAM_ERROR;
+	} else {
+		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+	}
+
+	return FRAM_SUCCESS;
+}
+
+int app_fram_write_counter(fram_data_t *dat)
+{
+	int ret;
+
+	const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+
+	if (!device_is_ready(i2c_dev)) {
+		printk("FRAM: I2C Device is not ready.\n");
+		return FRAM_ERROR;
+	}
+    printk("FRAM I2C Init Success!\n");
+
+	ret = i2c_write_bytes(i2c_dev, FRAM_COUNTER_ADDR, dat, FRAM_COUNTER_NUM_BYTES);
+	if (ret) {
+		printk("Error writing from FRAM! error code (%d)\n", ret);
+		return FRAM_ERROR;
+	} else {
+		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+	}
+
+	return FRAM_SUCCESS;
+}
+
 int app_fram_service(uint32_t *counter)
 {
     const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
@@ -158,16 +205,6 @@ int app_fram_service(uint32_t *counter)
 		return FRAM_ERROR;
 	}
     printk("FRAM I2C Init Success!\n");
-
-    // THIS WILL CLEAR THE DEVICE FRAM //
-    // ret = i2c_write_bytes(i2c_dev, FRAM_COUNTER_ADDR, &fram_data.u8[0], FRAM_COUNTER_NUM_BYTES);
-	// if (ret) {
-	// 	printk("Error writing to FRAM! error code (%d)\n", ret);
-	// 	return;
-	// } else {
-	// 	printk("Wrote %u to address 0x00.\n", fram_data.u32);
-	// }
-    // END RESET //
 
     // Read the 4 data bytes at this address
 	ret = i2c_read_bytes(i2c_dev, FRAM_COUNTER_ADDR, &fram_data.u8[0], FRAM_COUNTER_NUM_BYTES);

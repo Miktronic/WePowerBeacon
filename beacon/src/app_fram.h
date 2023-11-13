@@ -27,5 +27,7 @@ typedef struct
 int app_fram_service(uint32_t *counter);
 int app_fram_read_data(fram_data_t *dat);
 int app_fram_write_data(fram_data_t *dat);
+int app_fram_read_counter(fram_data_t *dat);
+int app_fram_write_counter(fram_data_t *dat);
 #endif /* APP_FRAM_H */
 
