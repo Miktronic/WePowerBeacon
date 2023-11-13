@@ -1,4 +1,2 @@
 osource "d:/wepowerbeacon/beacon/boards/shields/*/Kconfig.defconfig"
-osource "./boards/shields/*/Kconfig.defconfig"
-osource "D:/WePowerBeacon/beacon/./boards/shields/*/Kconfig.defconfig"
 osource "C:/ncs/v2.4.2/nrf/boards/shields/*/Kconfig.defconfig"

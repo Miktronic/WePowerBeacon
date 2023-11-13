@@ -23,13 +23,14 @@
 #include <zephyr/bluetooth/hci.h>
 #include <stdlib.h>
 #include <math.h>
-#include <zephyr/drivers/gpio.h>
+#include <hal/nrf_gpio.h>
 
 #include "app_types.h"
 #include "app_fram.h"
 #include "app_encryption.h"
 #include "app_accel.h"
 #include "app_temp_pressure.h"
+#include "zephyr/drivers/gpio.h"
 
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
@@ -50,7 +51,8 @@
 #define BLE_ADV_TIMEOUT                 (0)  // N * 10ms for advertiser timeout
 #define BLE_ADV_EVENTS                  (1)
 
-static const struct gpio_dt_spec pol_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(pol), gpios);
+#define POL_GPIO_PIN                    13
+//static const struct gpio_dt_spec pol_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(pol), gpios);
 
 static void timer_event_handler(struct k_timer *dummy);
 K_TIMER_DEFINE(timer_event, timer_event_handler, NULL);
@@ -75,6 +77,7 @@ static struct bt_data ad[] = {
 static void adv_sent(struct bt_le_ext_adv *instance,
 		     struct bt_le_ext_adv_sent_info *info)
 {	
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
 	manf_data[PAYLOAD_FRAME_COUNTER_INDEX] = manf_data[PAYLOAD_FRAME_COUNTER_INDEX]+1;
 }
 
@@ -243,14 +246,10 @@ void updateManufacturerData(struct k_work *work){
 // Main Application
 void main(void)
 {
-    int err;
+    nrf_gpio_cfg_output(POL_GPIO_PIN);
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
 
-    err = gpio_pin_configure_dt(&pol_gpio, GPIO_OUTPUT_ACTIVE);
-	if (err < 0) {
-		return 0;
-	}
-    
-    gpio_pin_set_dt(&pol_gpio, 1);
+    int err;
 
     printk("Trigger POL pin to HIGH Level\n"); 
     

@@ -163,9 +163,6 @@ D:/WePowerBeacon/beacon/build/zephyr/drivers/usb_c/CMakeFiles/rebuild_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/clock_control/CMakeFiles/drivers__clock_control.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/clock_control/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/clock_control/CMakeFiles/rebuild_cache.dir
-D:/WePowerBeacon/beacon/build/zephyr/drivers/console/CMakeFiles/drivers__console.dir
-D:/WePowerBeacon/beacon/build/zephyr/drivers/console/CMakeFiles/edit_cache.dir
-D:/WePowerBeacon/beacon/build/zephyr/drivers/console/CMakeFiles/rebuild_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/crypto/CMakeFiles/drivers__crypto.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/crypto/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/crypto/CMakeFiles/rebuild_cache.dir
@@ -194,9 +191,6 @@ D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/nrf5/CMakeFiles/rebuild_cach
 D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/stmemsc/CMakeFiles/drivers__sensor__stmemsc.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/stmemsc/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/sensor/stmemsc/CMakeFiles/rebuild_cache.dir
-D:/WePowerBeacon/beacon/build/zephyr/drivers/serial/CMakeFiles/drivers__serial.dir
-D:/WePowerBeacon/beacon/build/zephyr/drivers/serial/CMakeFiles/edit_cache.dir
-D:/WePowerBeacon/beacon/build/zephyr/drivers/serial/CMakeFiles/rebuild_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/timer/CMakeFiles/drivers__timer.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/timer/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/zephyr/drivers/timer/CMakeFiles/rebuild_cache.dir
@@ -338,9 +332,8 @@ D:/WePowerBeacon/beacon/build/modules/open-amp/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/modules/open-amp/CMakeFiles/rebuild_cache.dir
 D:/WePowerBeacon/beacon/build/modules/picolibc/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/modules/picolibc/CMakeFiles/rebuild_cache.dir
-D:/WePowerBeacon/beacon/build/modules/segger/CMakeFiles/rebuild_cache.dir
-D:/WePowerBeacon/beacon/build/modules/segger/CMakeFiles/modules__segger.dir
 D:/WePowerBeacon/beacon/build/modules/segger/CMakeFiles/edit_cache.dir
+D:/WePowerBeacon/beacon/build/modules/segger/CMakeFiles/rebuild_cache.dir
 D:/WePowerBeacon/beacon/build/modules/tinycrypt/CMakeFiles/edit_cache.dir
 D:/WePowerBeacon/beacon/build/modules/tinycrypt/CMakeFiles/rebuild_cache.dir
 D:/WePowerBeacon/beacon/build/modules/TraceRecorder/CMakeFiles/edit_cache.dir
