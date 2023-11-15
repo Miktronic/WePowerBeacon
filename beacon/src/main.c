@@ -31,6 +31,7 @@
 #include "app_accel.h"
 #include "app_temp_pressure.h"
 #include "zephyr/drivers/gpio.h"
+#include <zephyr/init.h>
 
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
@@ -74,6 +75,14 @@ static struct bt_data ad[] = {
     BT_DATA(BT_DATA_MANUFACTURER_DATA, manf_data, FRAME_LENGTH),
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x50, 0x57)
 };
+
+static void init_gpio_fn(void)
+{
+    nrf_gpio_cfg_output(POL_GPIO_PIN);
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
+}
+
+SYS_INIT(init_gpio_fn, POST_KERNEL, 0);
 
 static void adv_sent(struct bt_le_ext_adv *instance,
 		     struct bt_le_ext_adv_sent_info *info)
@@ -252,9 +261,6 @@ void updateManufacturerData(struct k_work *work){
 // Main Application
 void main(void)
 {
-    nrf_gpio_cfg_output(POL_GPIO_PIN);
-    nrf_gpio_pin_toggle(POL_GPIO_PIN);
-
     int err;
 
     cnt = 0;
