@@ -1,2 +1,2 @@
-beacon/build
-beacon/.vscode
+beacon/build/*
+beacon/.vscode/*
