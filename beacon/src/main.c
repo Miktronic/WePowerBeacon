@@ -39,7 +39,7 @@
 #define DEVICE_ID 3
 
 #define MANUF_DATA_CUSTOM_START_INDEX   2
-#define PAYLOAD_FRAME_COUNTER_INDEX     18
+#define PAYLOAD_TX_REPEAT_COUNTER_INDEX 18
 #define PAYLOAD_DEVICE_ID_INDEX         19
 #define PAYLOAD_STATUS_BYTE_INDEX       21
 #define PAYLOAD_RFU_BYTE_INDEX          22
@@ -51,6 +51,12 @@
 #define BLE_ADV_INTERVAL_MAX            (36) // N * 0.625. corresponds to dec. 36; 36*0.625 = 22.5ms
 #define BLE_ADV_TIMEOUT                 (0)  // N * 10ms for advertiser timeout
 #define BLE_ADV_EVENTS                  (1)
+
+
+#define PACKET_INTERVAL_MIN (10) // ms repeat rate
+#define PACKET_INTERVAL_MAX (50) // ms repeat rate
+
+#define LOGS (1) // if printk doesn't handle it use if(LOGS) printk();
 
 #define POL_GPIO_PIN                    13
 //static const struct gpio_dt_spec pol_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(pol), gpios);
@@ -64,11 +70,20 @@ static struct k_work_delayable update_frame_work;
 static we_power_data_ble_adv_t we_power_data;
 static struct bt_data we_power_adv_data;
 static struct bt_le_ext_adv *adv;
+
+// variable to store the FRAM data
 static fram_data_t fram_data = {0};
 static u16_u8_t device_id;
-static uint8_t cnt;
+static uint8_t TX_Repeat_Counter;
 
-//                                        |--------- ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ------------ |  cnt    id    id  status RFU
+uint32_t serial_number = DEVICE_ID;
+uint8_t  type = 1;
+uint8_t  event_inteval = 20;
+uint16_t event_max_limits = 240;
+uint16_t sleep_min_interval = 200;
+uint16_t sleep_after_wake = 0; // assumes sleep(0) is just a yield()
+
+//                                                    |--------- ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ------------ |  cnt    id    id  status RFU
 static uint8_t manf_data[FRAME_LENGTH] = { 0x50, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4F};
 static struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_NO_BREDR),
@@ -88,7 +103,6 @@ static void adv_sent(struct bt_le_ext_adv *instance,
 		     struct bt_le_ext_adv_sent_info *info)
 {	
     nrf_gpio_pin_toggle(POL_GPIO_PIN);
-    cnt++;
 }
 
 static int create_advertising(void)
@@ -149,20 +163,27 @@ static void bt_ready(void)
 
 static void timer_event_handler(struct k_timer *dummy)
 {
-    printk("Manufacturer Data: ");
-    for (uint8_t i = 0; i < FRAME_LENGTH; i++){
-        printk("%02X ", manf_data[i]);
+    if(LOGS){
+        printk("Manufacturer Data: ");
+        for (uint8_t i = 0; i < FRAME_LENGTH; i++){
+            printk("%02X ", manf_data[i]);
+        }
+        printk("\n");
     }
-    printk("\n");
 
-    if (cnt < fram_data.frame_max_limits){
-         k_work_submit(&start_advertising_worker);
+    TX_Repeat_Counter++;
+
+    if (TX_Repeat_Counter < fram_data.event_max_limits) // starts at 0, we send 1 if max is 1 by incrementing after the test.
+    {
+        
+        manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = TX_Repeat_Counter;
+        k_work_submit(&start_advertising_worker);
     }
     else {
         printk(">>> Sent maximum packets.\n");
-        cnt = 0;
+        TX_Repeat_Counter = 0;
         k_timer_stop(&timer_event);
-        k_work_reschedule(&update_frame_work, K_MSEC(fram_data.sleep_min_interval));
+        k_work_schedule(&update_frame_work, K_MSEC(fram_data.sleep_min_interval));
     }
 }
 
@@ -217,28 +238,34 @@ void encryptedData(uint8_t* clear_text_buf, uint8_t* encrypted_text_buf, uint8_t
     memcpy(cipher_text, encrypted_text_buf, 16);
     manf_data[PAYLOAD_STATUS_BYTE_INDEX] = PAYLOAD_ENCRYPTION_STATUS_CLEAR;
 #endif
+    if (LOGS){
+        printk("Payload - Cleartext: ");
+        for(int i = 0; i < len; i++)
+        {
+            printk("%02X ", clear_text_buf[i]);
+        }
+        printk("\n");
 
-    printk("Payload - Cleartext: ");
-    for(int i = 0; i < len; i++)
-    {
-        printk("%02X ", clear_text_buf[i]);
+        printk("Payload - Encrypted: ");
+        for(int i = 0; i < len; i++)
+        {
+            printk("%02X ", encrypted_text_buf[i]);
+        }
+        printk("\n");
     }
-    printk("\n");
-
-    printk("Payload - Encrypted: ");
-    for(int i = 0; i < len; i++)
-    {
-        printk("%02X ", encrypted_text_buf[i]);
-    }
-    printk("\n");
 }
-
+// only call this ONCE per EventCounter (FRAM[0:3])
 void updateManufacturerData(struct k_work *work){
     printk(">>> Updating the Manufacturer Data\n");
     //Get sensor data
     measure_sensors(&we_power_data);
-    // increase the frame counter
-    manf_data[PAYLOAD_FRAME_COUNTER_INDEX] =  manf_data[PAYLOAD_FRAME_COUNTER_INDEX] + 1;
+
+    // increase the FRAM Event counter
+	we_power_data.data_fields.event_counter.u32++;
+
+    	// initialize the TX counter
+	TX_Repeat_Counter = 0;
+	manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = TX_Repeat_Counter;
    
     // Handle encryption
     static uint8_t cipher_text[DATA_SIZE_BYTES];
@@ -252,10 +279,10 @@ void updateManufacturerData(struct k_work *work){
     we_power_adv_data.data = manf_data;
     we_power_adv_data.data_len = sizeof(manf_data);
 
-    k_timer_start(&timer_event, K_MSEC(fram_data.frame_inteval), K_MSEC(fram_data.frame_inteval)); // Start 20ms timer event
+    k_timer_start(&timer_event, K_MSEC(fram_data.event_inteval), K_MSEC(fram_data.event_inteval)); // Start 20ms timer event
 
-     fram_data.frame_counter = manf_data[PAYLOAD_FRAME_COUNTER_INDEX];
-     app_fram_write_counter(&fram_data);
+    fram_data.event_counter = we_power_data.data_fields.event_counter.u32;
+    app_fram_write_counter(&fram_data);
 }
 
 // Main Application
@@ -263,58 +290,29 @@ void main(void)
 {
     int err;
 
-    cnt = 0;
+    // read VEXT10 ADC, decide to run this or the configuration app.
 
-    printk("Trigger POL pin to HIGH Level\n"); 
-    
-    printk("Starting WePower gemns BLE Beacon Demo!\n"); 
-    
-    // Set the ID, we do this in the clear AND encrypted, for verification
-    device_id.u16 = DEVICE_ID;
-    we_power_data.data_fields.id = device_id;
+	// if VEXT10 > 0.165V we have external power
 
-    // Get the counter out of fram and increment it
+    // Reading FRAM.
     
-    if(app_fram_read_counter(&fram_data) == FRAM_SUCCESS)
+    if(app_fram_read_data(&fram_data) == FRAM_SUCCESS)
     {
         // Success! Add it to the payload
-        we_power_data.data_fields.fram_counter.u32 = fram_data.frame_counter;
-        manf_data[PAYLOAD_FRAME_COUNTER_INDEX] = fram_data.frame_counter + 1;
+		serial_number = (fram_data.serial_number?(fram_data.serial_number<0xFFFF? fram_data.serial_number:DEVICE_ID):DEVICE_ID);
+		type = (fram_data.type ? (fram_data.type < 0xFF ? fram_data.type : 1) : 1);
+		event_inteval = (fram_data.event_inteval >= PACKET_INTERVAL_MIN ? (fram_data.event_inteval <= PACKET_INTERVAL_MAX ? fram_data.event_inteval : PACKET_INTERVAL_MAX) : PACKET_INTERVAL_MIN); //
+		event_max_limits = (fram_data.event_max_limits >= 3 ? (fram_data.event_max_limits < 0xF0 ? fram_data.event_max_limits : 3) : 0xF0);
+		sleep_min_interval = (fram_data.sleep_min_interval >= 50 ? (fram_data.sleep_min_interval < 0xFFFF ? fram_data.sleep_min_interval : 0xFFF0) : 50);
+		sleep_after_wake = (fram_data.sleep_after_wake ? (fram_data.sleep_after_wake < 0xFFFF ? fram_data.sleep_after_wake : 20) : 0);
+		we_power_data.data_fields.event_counter.u32 = fram_data.event_counter;
+        //manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = fram_data.event_counter + 1; do it when we read sensors
     }
     else
     {
-         we_power_data.data_fields.fram_counter.u32 = 0xFFFFFFFF;
+         we_power_data.data_fields.event_counter.u32 = 0; // assume we are new, will increment and store 1
+		 fram_data.event_counter = 0;
     }
-
-    // initiate the fram data
-    fram_data.frame_counter = fram_data.frame_counter + 1;
-    fram_data.serial_number = DEVICE_ID;
-    fram_data.frame_inteval = 20;
-    fram_data.frame_max_limits = 0x000A; // the frame counter is 1 byte in the packet.
-    fram_data.sleep_min_interval = 100;
-    fram_data.sleep_after_wake = 1000;
-
-    if (app_fram_write_data(&fram_data) != FRAM_SUCCESS){
-        printk("Writing FRAM is failed.\n");
-    }
-
-    /*if (app_fram_read_data(&fram_data) != FRAM_SUCCESS){
-        printk("Reading FRAM is failed.\n");
-    }*/
-    //Get sensor data
-    measure_sensors(&we_power_data);
-   
-    // Handle encryption
-    static uint8_t cipher_text[DATA_SIZE_BYTES];
-
-    encryptedData(we_power_data.data_bytes, cipher_text, DATA_SIZE_BYTES);
-    // Build the BLE adv data
-    memcpy(&manf_data[MANUF_DATA_CUSTOM_START_INDEX], cipher_text, DATA_SIZE_BYTES);
-    memcpy(&manf_data[PAYLOAD_DEVICE_ID_INDEX], device_id.u8, 2);
-
-    we_power_adv_data.type = BT_DATA_SVC_DATA16;
-    we_power_adv_data.data = manf_data;
-    we_power_adv_data.data_len = sizeof(manf_data);
     
     // Init and run the BLE
 	err = bt_enable(NULL);
@@ -325,8 +323,11 @@ void main(void)
 	
 	bt_ready();
 
+    // Init works for advertising and measuring data
     k_work_init(&start_advertising_worker, start_advertising);
     k_work_init_delayable(&update_frame_work, updateManufacturerData);
 
-	k_timer_start(&timer_event, K_MSEC(fram_data.frame_inteval), K_MSEC(fram_data.frame_inteval)); // Start 20ms timer event
+    // Run the measuring task
+    k_work_schedule(&update_frame_work, K_MSEC(fram_data.sleep_min_interval));
+
 }

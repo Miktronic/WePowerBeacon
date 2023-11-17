@@ -95,14 +95,13 @@ int app_fram_read_data(fram_data_t *dat)
 		return FRAM_ERROR;
 	} else {
 		printk(">> ------- Reading FRAM Data -------\n");
-		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+		printk(">>[FRAM INFO]->Frame Counter: 0x%08X\n", dat->event_counter);
 		printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", dat->serial_number);
 		printk(">>[FRAM INFO]->Device Type: %d\n", dat->type);
-		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", dat->frame_inteval);
-		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", dat->frame_max_limits);
+		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", dat->event_inteval);
+		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", dat->event_max_limits);
 		printk(">>[FRAM INFO]->Minimum Sleeping Interval: %d\n", dat->sleep_min_interval);
 		printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", dat->sleep_after_wake);
-		printk(">>[FRAM INFO]->ASCII String: 0x%04X\n", dat->cmd);
 	}
 
 	return FRAM_SUCCESS;
@@ -127,14 +126,13 @@ int app_fram_write_data(fram_data_t *dat)
 		return FRAM_ERROR;
 	} else {
 		printk(">> ------- Writing FRAM Data -------\n");
-		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->event_counter);
 		printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", dat->serial_number);
 		printk(">>[FRAM INFO]->Device Type: %d\n", dat->type);
-		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", dat->frame_inteval);
-		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", dat->frame_max_limits);
+		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", dat->event_inteval);
+		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", dat->event_max_limits);
 		printk(">>[FRAM INFO]->Minimum Sleeping Interval: %d\n", dat->sleep_min_interval);
 		printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", dat->sleep_after_wake);
-		printk(">>[FRAM INFO]->ASCII String: 0x%04X\n", dat->cmd);
 	}
 
 	return FRAM_SUCCESS;
@@ -158,7 +156,7 @@ int app_fram_read_counter(fram_data_t *dat)
 		printk("Error reading from FRAM! error code (%d)\n", ret);
 		return FRAM_ERROR;
 	} else {
-		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+		printk(">>[FRAM INFO]->Frame Counter: 0x%08X\n", dat->event_counter);
 	}
 
 	return FRAM_SUCCESS;
@@ -181,7 +179,7 @@ int app_fram_write_counter(fram_data_t *dat)
 		printk("Error writing from FRAM! error code (%d)\n", ret);
 		return FRAM_ERROR;
 	} else {
-		printk(">>[FRAM INFO]->Frame Counter: %d\n", dat->frame_counter);
+		printk(">>[FRAM INFO]->Frame Counter: 0x%08X\n", dat->event_counter);
 	}
 
 	return FRAM_SUCCESS;
