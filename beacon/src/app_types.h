@@ -30,7 +30,8 @@ typedef union {
 
 typedef struct 
 {
-    u32_u8_t event_counter;  // 4 bytes (total)
+	uint8_t type; // 1 byte
+    uint8_t event_counter24[3];  // 4 bytes (total)
     i16_u8_t accel_x;       // 6
     i16_u8_t accel_y;       // 8
     i16_u8_t accel_z;       // 10

@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <hal/nrf_gpio.h>
+#include <zephyr/drivers/adc.h>
 
 #include "app_types.h"
 #include "app_fram.h"
@@ -56,10 +57,15 @@
 #define PACKET_INTERVAL_MIN (10) // ms repeat rate
 #define PACKET_INTERVAL_MAX (50) // ms repeat rate
 
-#define LOGS (1) // if printk doesn't handle it use if(LOGS) printk();
+#define LOGS (0) // if printk doesn't handle it use if(LOGS) printk();
 
 #define POL_GPIO_PIN                    13
-//static const struct gpio_dt_spec pol_gpio = GPIO_DT_SPEC_GET(DT_ALIAS(pol), gpios);
+
+
+/* Data of ADC io-channels specified in devicetree. */
+static const struct adc_dt_spec adc_channel =
+    ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
+
 
 static void timer_event_handler(struct k_timer *dummy);
 K_TIMER_DEFINE(timer_event, timer_event_handler, NULL);
@@ -73,7 +79,7 @@ static struct bt_le_ext_adv *adv;
 
 // variable to store the FRAM data
 static fram_data_t fram_data = {0};
-static u16_u8_t device_id;
+//static u16_u8_t device_id;
 static uint8_t TX_Repeat_Counter;
 
 uint32_t serial_number = DEVICE_ID;
@@ -82,6 +88,7 @@ uint8_t  event_inteval = 20;
 uint16_t event_max_limits = 240;
 uint16_t sleep_min_interval = 200;
 uint16_t sleep_after_wake = 0; // assumes sleep(0) is just a yield()
+uint8_t u8Polarity = 0;
 
 //                                                    |--------- ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ------------ |  cnt    id    id  status RFU
 static uint8_t manf_data[FRAME_LENGTH] = { 0x50, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4F};
@@ -257,11 +264,31 @@ void encryptedData(uint8_t* clear_text_buf, uint8_t* encrypted_text_buf, uint8_t
 // only call this ONCE per EventCounter (FRAM[0:3])
 void updateManufacturerData(struct k_work *work){
     printk(">>> Updating the Manufacturer Data\n");
-    //Get sensor data
-    measure_sensors(&we_power_data);
+   //Get sensor data
+	switch (type)
+	{
+	default: 
+		measure_sensors(&we_power_data);
+		break;
 
-    // increase the FRAM Event counter
-	we_power_data.data_fields.event_counter.u32++;
+	case 3: 
+		we_power_data.data_bytes[4] = u8Polarity;
+		memcpy(&we_power_data.data_bytes[5], fram_data.cName, 9);
+		break;
+
+	case 4: 
+		memcpy(&we_power_data.data_bytes[4], fram_data.cName, 10);
+		break;
+
+	}
+
+    // increase the FRAM Event counter and set first four bytes
+	fram_data.event_counter++;
+    app_fram_write_counter(&fram_data);
+	we_power_data.data_fields.type = fram_data.type;
+	we_power_data.data_fields.event_counter24[0] = (uint8_t)((fram_data.event_counter & 0x000000FF));
+	we_power_data.data_fields.event_counter24[1] = (uint8_t)((fram_data.event_counter & 0x0000FF00)>>8);
+	we_power_data.data_fields.event_counter24[2] = (uint8_t)((fram_data.event_counter & 0x00FF0000)>>16);
 
     	// initialize the TX counter
 	TX_Repeat_Counter = 0;
@@ -273,7 +300,7 @@ void updateManufacturerData(struct k_work *work){
     encryptedData(we_power_data.data_bytes, cipher_text, DATA_SIZE_BYTES);
     // Build the BLE adv data
     memcpy(&manf_data[MANUF_DATA_CUSTOM_START_INDEX], cipher_text, DATA_SIZE_BYTES);
-    memcpy(&manf_data[PAYLOAD_DEVICE_ID_INDEX], device_id.u8, 2);
+    memcpy(&manf_data[PAYLOAD_DEVICE_ID_INDEX], (uint16_t)(fram_data.serial_number&0xFFFF), 2);
 
     we_power_adv_data.type = BT_DATA_SVC_DATA16;
     we_power_adv_data.data = manf_data;
@@ -281,17 +308,66 @@ void updateManufacturerData(struct k_work *work){
 
     k_timer_start(&timer_event, K_MSEC(fram_data.event_inteval), K_MSEC(fram_data.event_inteval)); // Start 20ms timer event
 
-    fram_data.event_counter = we_power_data.data_fields.event_counter.u32;
-    app_fram_write_counter(&fram_data);
 }
 
+int32_t read_vcc10(void)
+{
+    int8_t err;
+
+    uint16_t buf;
+	struct adc_sequence sequence = {
+		.buffer = &buf,
+		/* buffer size in bytes, not number of samples */
+		.buffer_size = sizeof(buf),
+	};
+
+    int32_t val_mv;
+
+    if (!device_is_ready(adc_channel.dev)) {
+		printk("ADC controller device %s not ready\n", adc_channel.dev->name);
+		return -EINVAL;
+	}
+
+    err = adc_channel_setup_dt(&adc_channel);
+	if (err < 0) {
+		printk("Could not setup channel (%d)\n", err);
+		return -EINVAL;
+	}
+
+    printk("- %s, channel %d: ",
+			       adc_channel.dev->name,
+			       adc_channel.channel_id);
+    (void)adc_sequence_init_dt(&adc_channel, &sequence);
+
+    err = adc_read(adc_channel.dev, &sequence);
+	if (err < 0) {
+		printk("Could not read (%d)\n", err);
+        return -EINVAL;
+	}
+
+    val_mv = (int32_t)buf;
+
+    printk("%"PRId32, val_mv);
+
+    err = adc_raw_to_millivolts_dt(&adc_channel, &val_mv);
+
+	if (err < 0) {
+		printk(" (value in mV not available)\n");
+        return -EINVAL;
+	} else {
+		printk(" = %"PRId32" mV\n", val_mv);
+	}
+    return val_mv;
+
+}
 // Main Application
 void main(void)
 {
     int err;
+    int32_t vext10_mv;
 
     // read VEXT10 ADC, decide to run this or the configuration app.
-
+    vext10_mv = read_vcc10();
 	// if VEXT10 > 0.165V we have external power
 
     // Reading FRAM.
@@ -305,12 +381,26 @@ void main(void)
 		event_max_limits = (fram_data.event_max_limits >= 3 ? (fram_data.event_max_limits < 0xF0 ? fram_data.event_max_limits : 3) : 0xF0);
 		sleep_min_interval = (fram_data.sleep_min_interval >= 50 ? (fram_data.sleep_min_interval < 0xFFFF ? fram_data.sleep_min_interval : 0xFFF0) : 50);
 		sleep_after_wake = (fram_data.sleep_after_wake ? (fram_data.sleep_after_wake < 0xFFFF ? fram_data.sleep_after_wake : 20) : 0);
-		we_power_data.data_fields.event_counter.u32 = fram_data.event_counter;
-        //manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = fram_data.event_counter + 1; do it when we read sensors
+
+		if (fram_data.u8_voltsISL9122 >= 72 && fram_data.u8_voltsISL9122 <= 132)
+		{// // write fram_data.u8_voltsISL9122 to addr 0x18, reg 0x11
+		};
+			
+		if (fram_data.u8_POLmethod == OUT_POL) {// toggle output POL_GPIO_PIN
+			// sleep sleep_after_wake
+			nrf_gpio_cfg_output(POL_GPIO_PIN);
+			nrf_gpio_pin_set(POL_GPIO_PIN);
+		}
+		else if (fram_data.u8_POLmethod == IN_POL) {// sleep sleep_after_wake then read GPIO --> u8Polarity
+			// sleep sleep_after_wake
+            k_sleep(K_MSEC(fram_data.sleep_after_wake));
+			nrf_gpio_cfg_input(POL_GPIO_PIN, NRF_GPIO_PIN_PULLUP);
+			u8Polarity = nrf_gpio_pin_read(POL_GPIO_PIN);
+		}
+		//else if (fram_data.u8_POLmethod == CMP_POL) {/* not possible on nRF design.  sleep sleep_after_wake then read ACMP0 on EFR32*/};
     }
     else
     {
-         we_power_data.data_fields.event_counter.u32 = 0; // assume we are new, will increment and store 1
 		 fram_data.event_counter = 0;
     }
     
