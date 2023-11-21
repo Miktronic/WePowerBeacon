@@ -33,6 +33,7 @@
 #include "app_temp_pressure.h"
 #include "zephyr/drivers/gpio.h"
 #include <zephyr/init.h>
+#include <zephyr/drivers/uart.h>
 
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
@@ -61,11 +62,31 @@
 
 #define POL_GPIO_PIN                    13
 
+const char FRAM_FIELD_NAMES[9][18] = {
+    "EVENT Counter", "SERIAL NUMBER", "TYPE", "EVENT INTERVAL", "EVENT MAXIMUM LIMITS", "EVENT MINIMAL SLEEP"
+	"SLEEP AFTER WAKEUP", "VOLT of ISL9122", "POL METHOD", "NAME"};
+
+const uint8_t FRAM_FIELD_LENGTH[9] = {
+    (FRAM_COUNTER_NUM_BYTES-1), SER_NUM_BYTES, TYPE_NUM_BYTES, EV_INT_NUM_BYTES, EV_MAX_NUM_BYTES, 
+    EV_SLP_NUM_BYTES, IN_SLP_NUM_BYTES, ISL9122_NUM_BYTES, POL_MET_NUM_BYTES, NAME_NUM_BYTES
+};
+
+static uint32_t field_data = 0;
 
 /* Data of ADC io-channels specified in devicetree. */
 static const struct adc_dt_spec adc_channel =
     ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 
+#define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
+#define MSG_SIZE 32
+/* queue to store up to 1 messages (aligned to 4-byte boundary) */
+K_MSGQ_DEFINE(uart_msgq, MSG_SIZE, 1, 4);
+static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
+static struct k_work process_command_task;
+
+/* receive buffer used in UART ISR callback */
+static uint8_t rx_buf[MSG_SIZE];
+static int rx_buf_pos;
 
 static void timer_event_handler(struct k_timer *dummy);
 K_TIMER_DEFINE(timer_event, timer_event_handler, NULL);
@@ -81,6 +102,8 @@ static struct bt_le_ext_adv *adv;
 static fram_data_t fram_data = {0};
 //static u16_u8_t device_id;
 static uint8_t TX_Repeat_Counter;
+// I2C instance flag
+static uint8_t i2c_busy = 0;
 
 uint32_t serial_number = DEVICE_ID;
 uint8_t  type = 1;
@@ -90,6 +113,14 @@ uint16_t sleep_min_interval = 200;
 uint16_t sleep_after_wake = 0; // assumes sleep(0) is just a yield()
 uint8_t u8Polarity = 0;
 
+typedef struct
+{
+    uint8_t type;
+    uint8_t field;
+    uint8_t data[10];
+}command_data_t;
+
+command_data_t command_data = {0};
 //                                                    |--------- ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ENCRYPTED ------------ |  cnt    id    id  status RFU
 static uint8_t manf_data[FRAME_LENGTH] = { 0x50, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4F};
 static struct bt_data ad[] = {
@@ -98,10 +129,139 @@ static struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x50, 0x57)
 };
 
+void parse_command(uint8_t *buf)
+{
+    uint8_t space_idx = 0;
+    uint8_t data_idx = 0;
+
+    memset(&command_data, 0x00, sizeof(command_data_t));
+
+    for (uint8_t i=0; buf[i]!='\0'; i++){
+        if (buf[i] == ' '){
+            space_idx++;
+        }
+        else{
+            if (space_idx == 0){
+                command_data.type = buf[i];
+            }
+            else if (space_idx == 1){
+                command_data.field = command_data.field * 10 + (buf[i] - 48);
+            }
+            else if(space_idx == 2){
+                command_data.data[data_idx] = buf[i];
+                data_idx++;
+            }
+        }
+    }
+
+    printk("Command Type: %c, field: %d, data: %s\n", command_data.type, command_data.field, command_data.data);
+}
+
+void process_command(struct k_work *work)
+{
+    uint8_t response[128];
+
+    switch(command_data.type)
+    {
+        case 'G':
+            while(i2c_busy);
+            app_fram_read_field(command_data.field, (uint8_t*)&field_data);
+            sprintf(response, "FRAM field %s, length, %d, value is %d", FRAM_FIELD_NAMES[command_data.field], FRAM_FIELD_LENGTH[command_data.field], field_data);
+            printk("%s\n",response);
+            break;
+        case 'S':
+            break;
+        case 'C':
+            break;
+    }
+}
+void toUpperCase(uint8_t* buf)
+{
+    for (uint8_t i = 0; buf[i]!='\0'; i++) {
+      if(buf[i] >= 'a' && buf[i] <= 'z') {
+         buf[i] = buf[i] - 32;
+      }
+   }
+}
+/*
+ * Read characters from UART until line end is detected. Afterwards push the
+ * data to the message queue.
+ */
+void serial_cb(const struct device *dev, void *user_data)
+{
+	uint8_t c;
+
+	if (!uart_irq_update(uart_dev)) {
+		return;
+	}
+
+	if (!uart_irq_rx_ready(uart_dev)) {
+		return;
+	}
+
+	/* read until FIFO empty */
+	while (uart_fifo_read(uart_dev, &c, 1) == 1) {
+		if ((c == '\n' || c == '\r') && rx_buf_pos > 0) {
+			/* terminate string */
+			rx_buf[rx_buf_pos] = '\0';
+
+			/* if queue is full, message is silently dropped */
+			k_msgq_put(&uart_msgq, &rx_buf, K_NO_WAIT);
+
+			/* reset the buffer (it was copied to the msgq) */
+			rx_buf_pos = 0;
+
+            toUpperCase(rx_buf);
+
+            if(1){
+                printk("--------- UART Received Data -------------\n ");
+                for (int i = 0; i < rx_buf_pos; i++){
+                    printk("%c", rx_buf[i]);
+                }
+                printk("\n");
+            }
+
+            parse_command(rx_buf);
+
+            k_work_submit(&process_command_task);
+		} else if (rx_buf_pos < (sizeof(rx_buf) - 1)) {
+			rx_buf[rx_buf_pos++] = c;
+		}
+		/* else: characters beyond buffer size are dropped */
+	}
+}
+
+static int init_uart(void)
+{
+    if (!device_is_ready(uart_dev)) {
+		printk("UART device not found!");
+		return 0;
+	}
+
+	/* configure interrupt and callback to receive data */
+	int ret = uart_irq_callback_user_data_set(uart_dev, serial_cb, NULL);
+
+	if (ret < 0) {
+		if (ret == -ENOTSUP) {
+			printk("Interrupt-driven UART API support not enabled\n");
+		} else if (ret == -ENOSYS) {
+			printk("UART device does not support interrupt-driven API\n");
+		} else {
+			printk("Error setting UART callback: %d\n", ret);
+		}
+		return 0;
+	}
+	uart_irq_rx_enable(uart_dev);
+
+    printk("UART is initiated.\n");
+
+    return 0;
+}
+
 static void init_gpio_fn(void)
 {
     nrf_gpio_cfg_output(POL_GPIO_PIN);
-    nrf_gpio_pin_toggle(POL_GPIO_PIN);
+    nrf_gpio_pin_write(POL_GPIO_PIN,1);
 }
 
 SYS_INIT(init_gpio_fn, POST_KERNEL, 0);
@@ -141,6 +301,14 @@ void start_advertising(struct k_work *work)
 {
 	int err;
 
+     if(LOGS){
+        printk("Manufacturer Data: ");
+        for (uint8_t i = 0; i < FRAME_LENGTH; i++){
+            printk("%02X ", manf_data[i]);
+        }
+        printk("\n");
+    }
+
 	err = bt_le_ext_adv_set_data(adv, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err) {
 		printk("Failed to set advertising data (%d)\n", err);
@@ -170,17 +338,9 @@ static void bt_ready(void)
 
 static void timer_event_handler(struct k_timer *dummy)
 {
-    if(LOGS){
-        printk("Manufacturer Data: ");
-        for (uint8_t i = 0; i < FRAME_LENGTH; i++){
-            printk("%02X ", manf_data[i]);
-        }
-        printk("\n");
-    }
-
     TX_Repeat_Counter++;
 
-    if (TX_Repeat_Counter < fram_data.event_max_limits) // starts at 0, we send 1 if max is 1 by incrementing after the test.
+    if (TX_Repeat_Counter <= fram_data.event_max_limits) // starts at 0, we send 1 if max is 1 by incrementing after the test.
     {
         
         manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = TX_Repeat_Counter;
@@ -264,6 +424,7 @@ void encryptedData(uint8_t* clear_text_buf, uint8_t* encrypted_text_buf, uint8_t
 // only call this ONCE per EventCounter (FRAM[0:3])
 void updateManufacturerData(struct k_work *work){
     printk(">>> Updating the Manufacturer Data\n");
+    i2c_busy = 1; // using I2C instance
    //Get sensor data
 	switch (type)
 	{
@@ -285,6 +446,8 @@ void updateManufacturerData(struct k_work *work){
     // increase the FRAM Event counter and set first four bytes
 	fram_data.event_counter++;
     app_fram_write_counter(&fram_data);
+    i2c_busy = 0; // free I2C instance
+
 	we_power_data.data_fields.type = fram_data.type;
 	we_power_data.data_fields.event_counter24[0] = (uint8_t)((fram_data.event_counter & 0x000000FF));
 	we_power_data.data_fields.event_counter24[1] = (uint8_t)((fram_data.event_counter & 0x0000FF00)>>8);
@@ -300,14 +463,13 @@ void updateManufacturerData(struct k_work *work){
     encryptedData(we_power_data.data_bytes, cipher_text, DATA_SIZE_BYTES);
     // Build the BLE adv data
     memcpy(&manf_data[MANUF_DATA_CUSTOM_START_INDEX], cipher_text, DATA_SIZE_BYTES);
-    memcpy(&manf_data[PAYLOAD_DEVICE_ID_INDEX], (uint16_t)(fram_data.serial_number&0xFFFF), 2);
+    memcpy(&manf_data[PAYLOAD_DEVICE_ID_INDEX], &(fram_data.serial_number), 2);
 
     we_power_adv_data.type = BT_DATA_SVC_DATA16;
     we_power_adv_data.data = manf_data;
     we_power_adv_data.data_len = sizeof(manf_data);
 
     k_timer_start(&timer_event, K_MSEC(fram_data.event_inteval), K_MSEC(fram_data.event_inteval)); // Start 20ms timer event
-
 }
 
 int32_t read_vcc10(void)
@@ -371,28 +533,36 @@ void main(void)
 	// if VEXT10 > 0.165V we have external power
 
     // Reading FRAM.
-    
+ 
     if(app_fram_read_data(&fram_data) == FRAM_SUCCESS)
     {
         // Success! Add it to the payload
-		serial_number = (fram_data.serial_number?(fram_data.serial_number<0xFFFF? fram_data.serial_number:DEVICE_ID):DEVICE_ID);
+		
+        serial_number = (fram_data.serial_number?(fram_data.serial_number<0xFFFF? fram_data.serial_number:DEVICE_ID):DEVICE_ID);
 		type = (fram_data.type ? (fram_data.type < 0xFF ? fram_data.type : 1) : 1);
 		event_inteval = (fram_data.event_inteval >= PACKET_INTERVAL_MIN ? (fram_data.event_inteval <= PACKET_INTERVAL_MAX ? fram_data.event_inteval : PACKET_INTERVAL_MAX) : PACKET_INTERVAL_MIN); //
 		event_max_limits = (fram_data.event_max_limits >= 3 ? (fram_data.event_max_limits < 0xF0 ? fram_data.event_max_limits : 3) : 0xF0);
 		sleep_min_interval = (fram_data.sleep_min_interval >= 50 ? (fram_data.sleep_min_interval < 0xFFFF ? fram_data.sleep_min_interval : 0xFFF0) : 50);
 		sleep_after_wake = (fram_data.sleep_after_wake ? (fram_data.sleep_after_wake < 0xFFFF ? fram_data.sleep_after_wake : 20) : 0);
-
-		if (fram_data.u8_voltsISL9122 >= 72 && fram_data.u8_voltsISL9122 <= 132)
+        
+        fram_data.event_inteval=20;
+        fram_data.event_max_limits = 0x03;
+        fram_data.serial_number = DEVICE_ID;
+        fram_data.sleep_after_wake = 0;
+        fram_data.sleep_min_interval = 50;
+        fram_data.u8_POLmethod = OUT_POL;
+        fram_data.u8_voltsISL9122 = 0;
+        
+        if (fram_data.u8_voltsISL9122 >= 72 && fram_data.u8_voltsISL9122 <= 132)
 		{// // write fram_data.u8_voltsISL9122 to addr 0x18, reg 0x11
 		};
 			
 		if (fram_data.u8_POLmethod == OUT_POL) {// toggle output POL_GPIO_PIN
-			// sleep sleep_after_wake
 			nrf_gpio_cfg_output(POL_GPIO_PIN);
 			nrf_gpio_pin_set(POL_GPIO_PIN);
 		}
 		else if (fram_data.u8_POLmethod == IN_POL) {// sleep sleep_after_wake then read GPIO --> u8Polarity
-			// sleep sleep_after_wake
+            // sleep sleep_after_wake
             k_sleep(K_MSEC(fram_data.sleep_after_wake));
 			nrf_gpio_cfg_input(POL_GPIO_PIN, NRF_GPIO_PIN_PULLUP);
 			u8Polarity = nrf_gpio_pin_read(POL_GPIO_PIN);
@@ -403,6 +573,25 @@ void main(void)
     {
 		 fram_data.event_counter = 0;
     }
+
+    if (LOGS){
+        printk(">> ------- FRAM Data -------\n");
+		printk(">>[FRAM INFO]->Event Counter: 0x%08X\n", fram_data.event_counter);
+		printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", fram_data.serial_number);
+		printk(">>[FRAM INFO]->Device Type: %d\n", fram_data.type);
+		printk(">>[FRAM INFO]->Frame Interval: %d ms\n", fram_data.event_inteval);
+		printk(">>[FRAM INFO]->Frame Maximum Number: %d\n", fram_data.event_max_limits);
+		printk(">>[FRAM INFO]->Minimum Sleeping Interval: %d\n", fram_data.sleep_min_interval);
+		printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", fram_data.sleep_after_wake);
+		printk(">>[FRAM INFO]->Voltage of ISL9122: %d\n", fram_data.u8_voltsISL9122);
+		printk(">>[FRAM INFO]->POL Method: %d\n", fram_data.u8_POLmethod);
+		printk(">>[FRAM INFO]->cName: %s\n", fram_data.cName);
+    }
+
+    //Init UART
+    init_uart();
+    //Process the UART Command
+    k_work_init(&process_command_task, process_command);
     
     // Init and run the BLE
 	err = bt_enable(NULL);
