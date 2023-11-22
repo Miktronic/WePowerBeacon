@@ -58,7 +58,7 @@
 #define PACKET_INTERVAL_MIN (10) // ms repeat rate
 #define PACKET_INTERVAL_MAX (50) // ms repeat rate
 
-#define LOGS (0) // if printk doesn't handle it use if(LOGS) printk();
+#define LOGS (1) // if printk doesn't handle it use if(LOGS) printk();
 
 #define POL_GPIO_PIN                    13
 
@@ -102,6 +102,7 @@ static struct bt_le_ext_adv *adv;
 static fram_data_t fram_data = {0};
 //static u16_u8_t device_id;
 static uint8_t TX_Repeat_Counter;
+static uint8_t TX_Repeat_Counter_Init = 1;
 // I2C instance flag
 static uint8_t i2c_busy = 0;
 
@@ -261,7 +262,7 @@ static int init_uart(void)
 static void init_gpio_fn(void)
 {
     nrf_gpio_cfg_output(POL_GPIO_PIN);
-    nrf_gpio_pin_write(POL_GPIO_PIN,1);
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
 }
 
 SYS_INIT(init_gpio_fn, POST_KERNEL, 0);
@@ -339,16 +340,14 @@ static void bt_ready(void)
 static void timer_event_handler(struct k_timer *dummy)
 {
     TX_Repeat_Counter++;
-
     if (TX_Repeat_Counter <= fram_data.event_max_limits) // starts at 0, we send 1 if max is 1 by incrementing after the test.
     {
-        
         manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = TX_Repeat_Counter;
         k_work_submit(&start_advertising_worker);
     }
     else {
         printk(">>> Sent maximum packets.\n");
-        TX_Repeat_Counter = 0;
+        TX_Repeat_Counter = TX_Repeat_Counter_Init;
         k_timer_stop(&timer_event);
         k_work_schedule(&update_frame_work, K_MSEC(fram_data.sleep_min_interval));
     }
@@ -422,9 +421,8 @@ void encryptedData(uint8_t* clear_text_buf, uint8_t* encrypted_text_buf, uint8_t
     }
 }
 // only call this ONCE per EventCounter (FRAM[0:3])
-void updateManufacturerData(struct k_work *work){
+void updateManufacturerData(void){
     printk(">>> Updating the Manufacturer Data\n");
-    i2c_busy = 1; // using I2C instance
    //Get sensor data
 	switch (type)
 	{
@@ -446,15 +444,16 @@ void updateManufacturerData(struct k_work *work){
     // increase the FRAM Event counter and set first four bytes
 	fram_data.event_counter++;
     app_fram_write_counter(&fram_data);
-    i2c_busy = 0; // free I2C instance
 
 	we_power_data.data_fields.type = fram_data.type;
 	we_power_data.data_fields.event_counter24[0] = (uint8_t)((fram_data.event_counter & 0x000000FF));
 	we_power_data.data_fields.event_counter24[1] = (uint8_t)((fram_data.event_counter & 0x0000FF00)>>8);
 	we_power_data.data_fields.event_counter24[2] = (uint8_t)((fram_data.event_counter & 0x00FF0000)>>16);
+    we_power_data.data_fields.id.u16 = fram_data.serial_number & 0xFFFF;
 
-    	// initialize the TX counter
-	TX_Repeat_Counter = 0;
+    // initialize the TX counter
+
+	TX_Repeat_Counter = TX_Repeat_Counter_Init;
 	manf_data[PAYLOAD_TX_REPEAT_COUNTER_INDEX] = TX_Repeat_Counter;
    
     // Handle encryption
@@ -469,8 +468,14 @@ void updateManufacturerData(struct k_work *work){
     we_power_adv_data.data = manf_data;
     we_power_adv_data.data_len = sizeof(manf_data);
 
+}
+
+void update_frame_work_fn(struct k_work *work)
+{
+    updateManufacturerData();
     k_timer_start(&timer_event, K_MSEC(fram_data.event_inteval), K_MSEC(fram_data.event_inteval)); // Start 20ms timer event
 }
+
 
 int32_t read_vcc10(void)
 {
@@ -530,6 +535,7 @@ void main(void)
 
     // read VEXT10 ADC, decide to run this or the configuration app.
     vext10_mv = read_vcc10();
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
 	// if VEXT10 > 0.165V we have external power
 
     // Reading FRAM.
@@ -559,7 +565,7 @@ void main(void)
 			
 		if (fram_data.u8_POLmethod == OUT_POL) {// toggle output POL_GPIO_PIN
 			nrf_gpio_cfg_output(POL_GPIO_PIN);
-			nrf_gpio_pin_set(POL_GPIO_PIN);
+			nrf_gpio_pin_toggle(POL_GPIO_PIN);
 		}
 		else if (fram_data.u8_POLmethod == IN_POL) {// sleep sleep_after_wake then read GPIO --> u8Polarity
             // sleep sleep_after_wake
@@ -589,9 +595,9 @@ void main(void)
     }
 
     //Init UART
-    init_uart();
+    //init_uart();
     //Process the UART Command
-    k_work_init(&process_command_task, process_command);
+    //k_work_init(&process_command_task, process_command);
     
     // Init and run the BLE
 	err = bt_enable(NULL);
@@ -602,11 +608,17 @@ void main(void)
 	
 	bt_ready();
 
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
+
+    updateManufacturerData();
+    TX_Repeat_Counter_Init = 0;
+
+    nrf_gpio_pin_toggle(POL_GPIO_PIN);
+
     // Init works for advertising and measuring data
     k_work_init(&start_advertising_worker, start_advertising);
-    k_work_init_delayable(&update_frame_work, updateManufacturerData);
-
-    // Run the measuring task
-    k_work_schedule(&update_frame_work, K_MSEC(fram_data.sleep_min_interval));
+    k_work_init_delayable(&update_frame_work, update_frame_work_fn);
+    k_timer_start(&timer_event, K_MSEC(fram_data.event_inteval), K_MSEC(fram_data.event_inteval)); // Start 20ms timer event
+    k_work_submit(&start_advertising_worker);// submit the first packet
 
 }
