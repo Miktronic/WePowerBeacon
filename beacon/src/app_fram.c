@@ -141,7 +141,7 @@ int app_fram_read_field(uint8_t field, uint8_t *dat)
 	return FRAM_SUCCESS;
 }
 
-int app_fram_write_field(uint8_t field, uint32_t *dat)
+int app_fram_write_field(uint8_t field, uint8_t *dat)
 {
 	int ret;
 	uint16_t addr = 0;

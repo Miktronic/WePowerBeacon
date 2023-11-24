@@ -33,7 +33,7 @@ int app_accel_service(accel_data_t *accel_data)
 {
     const struct device *const accel_dev = DEVICE_DT_GET(DT_NODELABEL(accel));
     if (!device_is_ready(accel_dev)) {
-		printf("Device %s is not ready\n", accel_dev->name);
+		printk("Device %s is not ready\n", accel_dev->name);
 		return ACCEL_ERROR;
 	}
 

@@ -37,28 +37,28 @@ static void process_sample(const struct device *dev)
 	struct sensor_value pressure, temp;
 
 	if (sensor_sample_fetch(dev) < 0) {
-		printf("Sensor sample update error\n");
+		printk("Sensor sample update error\n");
 		return;
 	}
 
 	if (sensor_channel_get(dev, SENSOR_CHAN_PRESS, &pressure) < 0) {
-		printf("Cannot read LPS22HH pressure channel\n");
+		printk("Cannot read LPS22HH pressure channel\n");
 		return;
 	}
 
 	if (sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &temp) < 0) {
-		printf("Cannot read LPS22HH temperature channel\n");
+		printk("Cannot read LPS22HH temperature channel\n");
 		return;
 	}
 
 	++obs;
-	printf("Observation: %u\n", obs);
+	printk("Observation: %u\n", obs);
 
 	/* display pressure */
-	printf("Pressure: %.3f kPa\n", sensor_value_to_double(&pressure));
+	printk("Pressure: %.3f kPa\n", sensor_value_to_double(&pressure));
 
 	/* display temperature */
-	printf("Temperature: %.2f C\n", sensor_value_to_double(&temp));
+	printk("Temperature: %.2f C\n", sensor_value_to_double(&temp));
 
 }
 
@@ -82,11 +82,11 @@ void testing(void)
 
 		if (sensor_attr_set(dev, SENSOR_CHAN_ALL,
 				    SENSOR_ATTR_SAMPLING_FREQUENCY, &attr) < 0) {
-			printf("Cannot configure sampling rate\n");
+			printk("Cannot configure sampling rate\n");
 			return;
 		}
 		if (sensor_trigger_set(dev, &trig, lps22hh_handler) < 0) {
-			printf("Cannot configure trigger\n");
+			printk("Cannot configure trigger\n");
 			return;
 		}
 		printk("Configured for triggered collection at %u Hz\n",
@@ -124,11 +124,11 @@ int app_temp_pressure_service(temp_pressure_data_t *temp_pressure_data)
 
 		if (sensor_attr_set(dev, SENSOR_CHAN_ALL,
 				    SENSOR_ATTR_SAMPLING_FREQUENCY, &attr) < 0) {
-			printf("Cannot configure sampling rate\n");
+			printk("Cannot configure sampling rate\n");
 			return TEMP_PRESSURE_ERROR;
 		}
 		if (sensor_trigger_set(dev, &trig, lps22hh_handler) < 0) {
-			printf("Cannot configure trigger\n");
+			printk("Cannot configure trigger\n");
 			return TEMP_PRESSURE_ERROR;
 		}
 		printk("Configured for triggered collection at %u Hz\n",

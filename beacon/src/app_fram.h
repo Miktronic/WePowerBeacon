@@ -70,7 +70,7 @@ enum FRAM_FIELDS {
 };
 
 int app_fram_read_field(uint8_t field, uint8_t *dat);
-int app_fram_write_field(uint8_t field, uint32_t *dat);
+int app_fram_write_field(uint8_t field, uint8_t *dat);
 int app_fram_service(uint32_t *counter);
 int app_fram_read_data(fram_data_t *dat);
 int app_fram_write_data(fram_data_t *dat);
