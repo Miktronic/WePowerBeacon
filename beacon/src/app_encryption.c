@@ -23,6 +23,10 @@
 #define CRYPTO_DRV_NAME CONFIG_CRYPTO_MBEDTLS_SHIM_DRV_NAME
 #define CRYPTO_DEV_COMPAT nordic_nrf_ecb
 
+uint8_t ecb_key[16] = {
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
+};
 uint32_t cap_flags;
 
 // static void print_buffer_comparison(const uint8_t *wanted_result,
@@ -141,11 +145,6 @@ int app_encrypt_payload(uint8_t *cleartext, uint8_t cleartext_len, uint8_t *encr
 	}
 
     printk("Crypto Init Success!\n");
-
-    uint8_t ecb_key[16] = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
-	};
 
 	struct cipher_ctx ini = {
 		.keylen = sizeof(ecb_key),

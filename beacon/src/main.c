@@ -63,18 +63,51 @@
 #define POL_GPIO_PIN                    13
 
 #define FIELD_NAME_MAX_LENGTH       32
+
+enum FRAM_TYPE {
+    NUMBER = 0,
+    STRING,
+    BYTE_ARRAY,
+};
+
+typedef struct
+{
+    char name[FIELD_NAME_MAX_LENGTH];
+    uint8_t type;
+    uint8_t field_length;
+    uint32_t min_value;
+    uint32_t max_value;
+}fram_info_t;
+
+const fram_info_t FRAM_INFO[MAX_FRAM_FIELDS] = {
+    {"EVENT Counter", NUMBER, (FRAM_COUNTER_NUM_BYTES-1), 0, 0xFFFFFF},
+    {"SERIAL NUMBER", NUMBER, SER_NUM_BYTES, 0, 0xFFFF},
+    {"TYPE", NUMBER, TYPE_NUM_BYTES, 0, 0xFF},
+    {"EVENT INTERVAL", NUMBER, EV_INT_NUM_BYTES, 20, 30},
+    {"EVENT MAXIMUM LIMITS", NUMBER,EV_MAX_NUM_BYTES, 1, 0xF0},
+    {"EVENT MINIMAM SLEEP", NUMBER, EV_SLP_NUM_BYTES, 0, 100},
+    {"SLEEP AFTER WAKEUP", NUMBER, IN_SLP_NUM_BYTES, 0, 1000},
+    {"VOLT of ISL9122", NUMBER, ISL9122_NUM_BYTES, 0, 0xFF},
+    {"POL METHOD", NUMBER, POL_MET_NUM_BYTES, 0, 1},
+    {"ENCRYPTED KEY", BYTE_ARRAY, ENCRYPTED_KEY_NUM_BYTES, NULL, NULL},
+    {"TX dBM 10", NUMBER, TX_DBM_NUM_BYTES, 0, 0xFF},
+    {"Device NAME", STRING, NAME_NUM_BYTES, NULL, NULL}
+};
+/*
 const char FRAM_FIELD_NAMES[MAX_FRAM_FIELDS][FIELD_NAME_MAX_LENGTH] = {
     "EVENT Counter", "SERIAL NUMBER", "TYPE", "EVENT INTERVAL", "EVENT MAXIMUM LIMITS", "EVENT MINIMAM SLEEP",
-	"SLEEP AFTER WAKEUP", "VOLT of ISL9122", "POL METHOD", "Device NAME",};
+	"SLEEP AFTER WAKEUP", "VOLT of ISL9122", "POL METHOD", "ENCRYPTED KEY", "TX dBM 10", "Device NAME",};
 
 const uint8_t FRAM_FIELD_LENGTH[MAX_FRAM_FIELDS] = {
     (FRAM_COUNTER_NUM_BYTES-1), SER_NUM_BYTES, TYPE_NUM_BYTES, EV_INT_NUM_BYTES, EV_MAX_NUM_BYTES, 
     EV_SLP_NUM_BYTES, IN_SLP_NUM_BYTES, ISL9122_NUM_BYTES, POL_MET_NUM_BYTES, NAME_NUM_BYTES,
 };
 
-const uint8_t bIsNumeric[MAX_FRAM_FIELDS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-const uint32_t MinValue[MAX_FRAM_FIELDS] = {0, 0, 0, 20, 1, 0, 0, 0, 0, 0};
-const uint32_t MaxValue[MAX_FRAM_FIELDS] = {0xFFFFFF, 0xFFFF, 0xFF, 30, 0xF0, 100, 1000, 1700, 1, 0xFF};
+const uint8_t bIsNumeric[MAX_FRAM_FIELDS] = {NUMBER, NUMBER, NUMBER, NUMBER, NUMBER, NUMBER, NUMBER, NUMBER, NUMBER, BYTE_ARRAY, NUMBER, STRING};
+
+const uint32_t MinValue[MAX_FRAM_FIELDS] = {0, 0, 0, 20, 1, 0, 0, 0, 0, 0, 0, 0};
+const uint32_t MaxValue[MAX_FRAM_FIELDS] = {0xFFFFFF, 0xFFFF, 0xFF, 30, 0xF0, 100, 1000, 1700, 1, 0xFF, 0xFF, 0xFF};
+*/
 
 /* Data of ADC io-channels specified in devicetree. */
 static const struct adc_dt_spec adc_channel =
@@ -115,10 +148,12 @@ uint16_t sleep_min_interval = 200;
 uint16_t sleep_after_wake = 0; // assumes sleep(0) is just a yield()
 uint8_t u8Polarity = 0;
 
+extern uint8_t ecb_key[16];
+
 typedef struct
 {
     uint8_t type;
-    uint8_t field_index;
+    int8_t field_index;
     uint8_t data_len;
     uint8_t data[(UART_MSG_SIZE - 3)];
 }command_data_t;
@@ -132,6 +167,17 @@ static struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x50, 0x57)
 };
 
+void print_uart(char *buffer)
+{
+	int msg_len = strlen(buffer);
+
+	for (int i = 0; i < msg_len; i++) {
+		uart_poll_out(uart_dev, buffer[i]);
+	}
+
+    uart_poll_out(uart_dev, '\n');
+}
+
 void parse_command(uint8_t *buf)
 {
     uint8_t space_idx = 0;
@@ -142,17 +188,56 @@ void parse_command(uint8_t *buf)
     for (uint8_t i=0; buf[i]!='\0'; i++){
         if ((buf[i] == ' ') && (space_idx < 2)){
             space_idx++;
+
+            if ((space_idx == 2) || (command_data.field_index == NAME)){
+                memset(&command_data.data, ' ', NAME_NUM_BYTES); // init cName with space character
+            }
         }
         else{
             if (space_idx == 0){
                 command_data.type = buf[i];
             }
             else if (space_idx == 1){
-                command_data.field_index = command_data.field_index * 10 + (buf[i] - 48);
+                if (command_data.type == 'K') { // K command
+                    command_data.type = 'S';
+                    command_data.field_index = ENCRYPTED_KEY;
+                    space_idx = 2;
+                }
+                else if (command_data.type == 'N'){ // N command
+                    command_data.type = 'S';
+                    command_data.field_index = NAME;
+                    memset(&command_data.data, ' ', NAME_NUM_BYTES); // init cName with space character
+                    space_idx = 2;
+                }
+                else {
+                    if ((buf[i] >= 48) && (buf[i] <= 57)){
+                        command_data.field_index = command_data.field_index * 10 + (buf[i] - 48);
+                    }
+                    else {
+                        command_data.field_index = -1;
+                    }
+                }
             }
-            else if(space_idx == 2){
-                command_data.data[data_idx] = buf[i];
-                data_idx++;
+            
+            if(space_idx == 2){
+                if(command_data.field_index == ENCRYPTED_KEY){
+                    if((buf[i] >= '0') && (buf[i] <= '9')) {
+                        command_data.data[data_idx] = command_data.data[data_idx] * 16 + (buf[i] - 48);
+                    }
+                    else if ((buf[i] >= 'a') && (buf[i] <= 'f')){
+                        command_data.data[data_idx] = command_data.data[data_idx] * 16 + (buf[i] - 87);
+                    }
+                    else if ((buf[i] >= 'A') && (buf[i] <= 'F')){
+                        command_data.data[data_idx] = command_data.data[data_idx] * 16 + (buf[i] - 55);
+                    }
+                    else if (buf[i] == ' '){
+                        data_idx++;
+                    }
+                }
+                else {
+                    command_data.data[data_idx] = buf[i];
+                    data_idx++;
+                }
             }
         }
     }
@@ -163,6 +248,7 @@ void parse_command(uint8_t *buf)
 int process_command_fn(struct k_work *work)
 {
     uint8_t response[256] = {0};
+    uint8_t encrypted_key_str[(3 * ENCRYPTED_KEY_NUM_BYTES) + 1] = {0};
     uint32_t field_data = 0;
 
     printk("Parsed Command is Type: %c, field: %d, data: %s\n", command_data.type, command_data.field_index, command_data.data);
@@ -170,19 +256,35 @@ int process_command_fn(struct k_work *work)
     if(command_data.field_index >= MAX_FRAM_FIELDS){
         sprintf(response, "FRAM field %d does not exist\n", command_data.field_index);
         printk("%s\n", response);
-
+        print_uart(response);
+        return -EINVAL;
+    }
+    else if (command_data.field_index < 0){
+        sprintf(response, "FRAM field %d is invalid.\n", command_data.field_index);
+        printk("%s\n", response);
+        print_uart(response);
         return -EINVAL;
     }
 
     if ((command_data.type == 'G') || (command_data.type == 'g'))
     {
         if ( app_fram_read_field(command_data.field_index, command_data.data) == FRAM_SUCCESS){
-            if (bIsNumeric[command_data.field_index] == 0){
-                memcpy(&field_data, command_data.data, FRAM_FIELD_LENGTH[command_data.field_index]);
-                sprintf(response, "FRAM field %s, length, %d, value is %d.\n", FRAM_FIELD_NAMES[command_data.field_index], FRAM_FIELD_LENGTH[command_data.field_index], field_data);
+            if (FRAM_INFO[command_data.field_index].type == NUMBER){
+                memcpy(&field_data, command_data.data, FRAM_INFO[command_data.field_index].field_length);
+                sprintf(response, "FRAM field %s, length, %d, value is %d.\n", 
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].field_length, field_data);
             }
-            else{
-                sprintf(response, "FRAM field %s, length, %d, value is %s.\n", FRAM_FIELD_NAMES[command_data.field_index], FRAM_FIELD_LENGTH[command_data.field_index], command_data.data);
+            else if (FRAM_INFO[command_data.field_index].type == STRING){
+                sprintf(response, "FRAM field %s, length, %d, value is %s.\n", 
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].field_length, command_data.data);
+            }
+            else if (FRAM_INFO[command_data.field_index].type == BYTE_ARRAY){
+                for (uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
+                    sprintf(&encrypted_key_str[(i * 3)], "%02X ", command_data.data[i]);
+                }
+                encrypted_key_str[(3*ENCRYPTED_KEY_NUM_BYTES - 1)] = '.';
+                sprintf(response, "FRAM field %s, length, %d, value is 0x%s\n", 
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].field_length, encrypted_key_str);
             }
         }
         else{
@@ -190,45 +292,45 @@ int process_command_fn(struct k_work *work)
         }
     }
     else if ((command_data.type == 'S') || (command_data.type == 's')){
-        if (bIsNumeric[command_data.field_index] == 0){
+        if (FRAM_INFO[command_data.field_index].type == NUMBER){ //Numeric
             for (uint8_t i = 0; i < command_data.data_len; i++){
                 field_data = field_data * 10 + (command_data.data[i] - 48);
             }
 
             printk(" Numeric Data: %d\n", field_data);
 
-            if(field_data < MinValue[command_data.field_index]){
+            if(field_data < FRAM_INFO[command_data.field_index].min_value){
                 if (app_fram_read_field(command_data.field_index, &field_data) == FRAM_SUCCESS){
                     sprintf(response, "FRAM field %s, Min limit %d, Value is %d.\n", 
-                        FRAM_FIELD_NAMES[command_data.field_index], MinValue[command_data.field_index], field_data);
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].min_value, field_data);
                 }else{
                     sprintf(response, "Access to FRAM failed.\n");
                 }
             }
-            else if (field_data > MaxValue[command_data.field_index]){
+            else if (field_data > FRAM_INFO[command_data.field_index].max_value){
                 if (app_fram_read_field(command_data.field_index, &field_data) == FRAM_SUCCESS){
                     sprintf(response, "FRAM field %s, Max limit %d exceeded, Value is %d.\n", 
-                        FRAM_FIELD_NAMES[command_data.field_index], MaxValue[command_data.field_index], field_data);
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].max_value, field_data);
                 } else {
                     sprintf(response, "Access to FRAM failed.\n");
                 }
             }
             else {
                 if (app_fram_write_field(command_data.field_index, &field_data) == FRAM_SUCCESS){
-                    sprintf(response, "FRAM field %s, Value is %d.\n", FRAM_FIELD_NAMES[command_data.field_index], field_data);
+                    sprintf(response, "FRAM field %s, Value is %d.\n", FRAM_INFO[command_data.field_index].name, field_data);
                 }
                 else {
                     sprintf(response, "Access to FRAM failed.\n");
                 }
             }   
         }
-        else{
-            if (command_data.data_len > 10){
+        else if(FRAM_INFO[command_data.field_index].type == STRING){ //String
+            if (command_data.data_len > FRAM_INFO[command_data.field_index].field_length){
                 if (app_fram_read_field(command_data.field_index, &command_data.data) == FRAM_SUCCESS){
                     sprintf(
                         response, 
-                        "Type is alphanumeric, but number of characters exceeds maximum length of 10 bytes. FRAM field %s, length exceeded, Value is %s.\n", 
-                        FRAM_FIELD_NAMES[command_data.field_index], command_data.data
+                        "Number of characters exceeds maximum length of 10 bytes. FRAM field %s, length exceeded, Value is %s.\n", 
+                        FRAM_INFO[command_data.field_index].name, command_data.data
                     );
                 }
                 else{
@@ -239,29 +341,50 @@ int process_command_fn(struct k_work *work)
                 if(app_fram_write_field(command_data.field_index, command_data.data) == FRAM_SUCCESS){
                     sprintf(
                         response, 
-                        "Type is alphanumeric, number of characters does not exceed maximum length of 10 bytes. Fram field %s, length %d, value is %s.\n",
-                        FRAM_FIELD_NAMES[command_data.field_index], FRAM_FIELD_LENGTH[command_data.field_index], command_data.data
+                        "Fram field %s, length %d, value is %s.\n",
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].field_length, command_data.data
                     );
                 } else {
                     sprintf(response, "Access to FRAM failed.\n");
                 }
             }
         }
+        else if (FRAM_INFO[command_data.field_index].type == BYTE_ARRAY){
+            if(app_fram_write_field(command_data.field_index, command_data.data) == FRAM_SUCCESS){
+                for (uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
+                    sprintf(&encrypted_key_str[(i * 3)], "%02X ", command_data.data[i]);
+                }
+                encrypted_key_str[(3*ENCRYPTED_KEY_NUM_BYTES - 1)] = '.';
+                sprintf(response, "FRAM field %s, length, %d, value is 0x%s\n", 
+                        FRAM_INFO[command_data.field_index].name, FRAM_INFO[command_data.field_index].field_length, encrypted_key_str);       
+            } else {
+                sprintf(response, "Access to FRAM failed.\n");
+            }
+        }
     }
     else if ((command_data.type == 'C') || (command_data.type == 'c')){
-        if (bIsNumeric[command_data.field_index] == 0){
+        if (FRAM_INFO[command_data.field_index].type == NUMBER){
             field_data = 0;
             if (app_fram_write_field(command_data.field_index, &field_data) == FRAM_SUCCESS){
-                sprintf(response, "FRAM field %s, Value is %d.\n", FRAM_FIELD_NAMES[command_data.field_index], field_data);
+                sprintf(response, "FRAM field %s, Value is %d.\n", FRAM_INFO[command_data.field_index].name, field_data);
             }
             else {
                 sprintf(response, "Access to FRAM failed.\n");
             }
         }
-        else{
-            memset(command_data.data, 0x00, (UART_MSG_SIZE - 3));
+        else if (FRAM_INFO[command_data.field_index].type == STRING){
+            memset(command_data.data, ' ', FRAM_INFO[command_data.field_index].field_length);
             if(app_fram_write_field(command_data.field_index, command_data.data) == FRAM_SUCCESS){
-                sprintf(response, "FRAM field %s, Value is \"%s\".\n", FRAM_FIELD_NAMES[command_data.field_index], field_data);
+                sprintf(response, "FRAM field %s, Value is \"%s\".\n", FRAM_INFO[command_data.field_index].name, field_data);
+            }
+            else{
+                sprintf(response, "Access to FRAM failed.\n");
+            }
+        }
+        else if (FRAM_INFO[command_data.field_index].type == BYTE_ARRAY){
+            memset(command_data.data, 0x00, FRAM_INFO[command_data.field_index].field_length);
+            if(app_fram_write_field(command_data.field_index, command_data.data) == FRAM_SUCCESS){
+                sprintf(response, "FRAM field %s, Value is \"%s\".\n", FRAM_INFO[command_data.field_index].name, field_data);
             }
             else{
                 sprintf(response, "Access to FRAM failed.\n");
@@ -269,7 +392,8 @@ int process_command_fn(struct k_work *work)
         }
     }
 
-    printk("%s\n",response);
+    printk("%s",response);
+    print_uart(response);
     return 0;
 }
 /*
@@ -636,7 +760,7 @@ void main(void)
             // Success! Add it to the payload
 
             if (0){
-                printk(">> ------- FRAM Data -------\n");
+                printk(">> ------- Writing FRAM Data -------\n");
 		        printk(">>[FRAM INFO]->Event Counter: 0x%08X\n", fram_data.event_counter);
 		        printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", fram_data.serial_number);
 		        printk(">>[FRAM INFO]->Device Type: %d\n", fram_data.type);
@@ -646,6 +770,12 @@ void main(void)
 		        printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", fram_data.sleep_after_wake);
 		        printk(">>[FRAM INFO]->Voltage of ISL9122: %d\n", fram_data.u8_voltsISL9122);
 		        printk(">>[FRAM INFO]->POL Method: %d\n", fram_data.u8_POLmethod);
+		        printk(">>[FRAM INFO]->Encrypted Key: ");
+		        for (uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
+			        printk("0x%02X,", fram_data.encrypted_key[i]);
+		        }
+		        printk("\n");
+		        printk(">>[FRAM INFO]->TX dBM 10: %d\n", fram_data.tx_dbm_10);
 		        printk(">>[FRAM INFO]->cName: %s\n", fram_data.cName);
             }
 		
@@ -679,6 +809,12 @@ void main(void)
 			    u8Polarity = nrf_gpio_pin_read(POL_GPIO_PIN);
 		    }
 		    //else if (fram_data.u8_POLmethod == CMP_POL) {/* not possible on nRF design.  sleep sleep_after_wake then read ACMP0 on EFR32*/};
+            
+            if(0){
+                for(uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
+                    ecb_key[i] = fram_data.encrypted_key[i];
+                }
+            }
         }
         else
         {

@@ -30,7 +30,11 @@
 #define ISL9122_NUM_BYTES			1
 #define POL_MET_ADDR				0x0011
 #define POL_MET_NUM_BYTES			1
-#define NAME_ADDR					0x0012
+#define ENCRYPTED_KEY_ADDR			0x0012
+#define ENCRYPTED_KEY_NUM_BYTES		16
+#define TX_DBM_ADDR					0x0022
+#define TX_DBM_NUM_BYTES			1
+#define NAME_ADDR					0x0023
 #define NAME_NUM_BYTES				10
 
 enum POL_ACTIONS {
@@ -52,6 +56,8 @@ typedef struct
     uint16_t sleep_after_wake;
 	uint8_t u8_voltsISL9122;
 	uint8_t u8_POLmethod; 
+	uint8_t encrypted_key[16];
+	uint8_t tx_dbm_10;
 	uint8_t cName[10];
 } fram_data_t;
 
@@ -65,7 +71,9 @@ enum FRAM_FIELDS {
        IN_SLP,
        ISL9122,
        POL_MET,
-       NAME,
+	   ENCRYPTED_KEY,
+	   TX_DBM,
+	   NAME,
        MAX_FRAM_FIELDS
 };
 

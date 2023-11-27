@@ -125,6 +125,14 @@ int app_fram_read_field(uint8_t field, uint8_t *dat)
 		addr = POL_MET_ADDR;
 		length = POL_MET_NUM_BYTES;
 	}
+	else if (field == ENCRYPTED_KEY){
+		addr = ENCRYPTED_KEY_ADDR;
+		length = ENCRYPTED_KEY_NUM_BYTES;
+	}
+	else if (field == TX_DBM){
+		addr = TX_DBM_ADDR;
+		length = TX_DBM_NUM_BYTES;
+	}
 	else if (field == NAME){
 		addr = NAME_ADDR;
 		length = NAME_NUM_BYTES;
@@ -192,6 +200,14 @@ int app_fram_write_field(uint8_t field, uint8_t *dat)
 			addr = POL_MET_ADDR;
 			num_bytes = POL_MET_NUM_BYTES;
 			break;
+		case ENCRYPTED_KEY:
+			addr = ENCRYPTED_KEY_ADDR;
+			num_bytes = ENCRYPTED_KEY_NUM_BYTES;
+			break;
+		case TX_DBM:
+			addr = TX_DBM_ADDR;
+			num_bytes = TX_DBM_NUM_BYTES;
+			break;
 		case NAME:
 			addr = NAME_ADDR;
 			num_bytes = NAME_NUM_BYTES;
@@ -256,6 +272,12 @@ int app_fram_write_data(fram_data_t *dat)
 		printk(">>[FRAM INFO]->Sleep time After Wake up: %d\n", dat->sleep_after_wake);
 		printk(">>[FRAM INFO]->Voltage of ISL9122: %d\n", dat->u8_voltsISL9122);
 		printk(">>[FRAM INFO]->POL Method: %d\n", dat->u8_POLmethod);
+		printk(">>[FRAM INFO]->Encrypted Key: ");
+		for (uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
+			printk("0x%02X,", dat->encrypted_key[i]);
+		}
+		printk("\n");
+		printk(">>[FRAM INFO]->TX dBM 10: %d\n", dat->tx_dbm_10);
 		printk(">>[FRAM INFO]->cName: %s\n", dat->cName);
 	}
 
