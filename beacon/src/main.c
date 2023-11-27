@@ -35,6 +35,12 @@
 #include <zephyr/init.h>
 #include <zephyr/drivers/uart.h>
 
+// conditional compile options
+#define FORCE_TOGGLE (1)
+#define FORCE_FRAM_VALS (0)
+#define HAVE_ISL9122 (0)
+#define USING_MG24 (0)
+#define ENCR_KEY_IN_FRAM (0)
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
@@ -148,6 +154,8 @@ uint16_t sleep_min_interval = 200;
 uint16_t sleep_after_wake = 0; // assumes sleep(0) is just a yield()
 uint8_t u8Polarity = 0;
 
+uint8_t bPressureRequested = 0;
+
 extern uint8_t ecb_key[16];
 
 typedef struct
@@ -166,6 +174,16 @@ static struct bt_data ad[] = {
     BT_DATA(BT_DATA_MANUFACTURER_DATA, manf_data, FRAME_LENGTH),
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x50, 0x57)
 };
+
+static void init_gpio_fn(void)
+{
+    #if (FORCE_TOGGLE)
+    	nrf_gpio_cfg_output(POL_GPIO_PIN); 
+        nrf_gpio_pin_toggle(POL_GPIO_PIN);
+    #endif 
+}
+
+SYS_INIT(init_gpio_fn, POST_KERNEL, 0); // Define the Initi function of System
 
 void print_uart(char *buffer)
 {
@@ -418,7 +436,7 @@ void serial_cb(const struct device *dev, void *user_data)
 			/* terminate string */
 			rx_buf[rx_buf_pos] = '\0';
 
-            if(1){
+            if(LOGS){
                 printk("--------- UART Received Data -------------\n ");
                 for (int i = 0; i < rx_buf_pos; i++){
                     printk("%c", rx_buf[i]);
@@ -468,14 +486,6 @@ static int init_uart(void)
 
     return 0;
 }
-
-static void init_gpio_fn(void)
-{
-    nrf_gpio_cfg_output(POL_GPIO_PIN);
-    nrf_gpio_pin_toggle(POL_GPIO_PIN);
-}
-
-SYS_INIT(init_gpio_fn, POST_KERNEL, 0);
 
 static void adv_sent(struct bt_le_ext_adv *instance,
 		     struct bt_le_ext_adv_sent_info *info)
@@ -742,10 +752,13 @@ void main(void)
 {
     int err;
     int32_t vext10_mv;
-
     // read VEXT10 ADC, decide to run this or the configuration app.
     vext10_mv = read_vcc10() * 11;
+
+#if (FORCE_TOGGLE)
     nrf_gpio_pin_toggle(POL_GPIO_PIN);
+#endif
+
 	// if VEXT10 > 0.165V we have external power
     if (vext10_mv > 1700){
         //Init UART
@@ -754,12 +767,16 @@ void main(void)
         k_work_init(&process_command_task, process_command_fn);
     }
     else{
+        // ask for temp/pressure data now so we don't sleep(10) later
+		if (TEMP_PRESSURE_SUCCESS == app_temp_pressure_trigger())
+			bPressureRequested = 1;
+        
         // Reading FRAM.
         if(app_fram_read_data(&fram_data) == FRAM_SUCCESS)
         {
             // Success! Add it to the payload
 
-            if (0){
+            if (LOGS){
                 printk(">> ------- Writing FRAM Data -------\n");
 		        printk(">>[FRAM INFO]->Event Counter: 0x%08X\n", fram_data.event_counter);
 		        printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", fram_data.serial_number);
@@ -785,7 +802,7 @@ void main(void)
 		    event_max_limits = (fram_data.event_max_limits >= 3 ? (fram_data.event_max_limits < 0xF0 ? fram_data.event_max_limits : 3) : 0xF0);
 		    sleep_min_interval = (fram_data.sleep_min_interval >= 50 ? (fram_data.sleep_min_interval < 0xFFFF ? fram_data.sleep_min_interval : 0xFFF0) : 50);
 		    sleep_after_wake = (fram_data.sleep_after_wake ? (fram_data.sleep_after_wake < 0xFFFF ? fram_data.sleep_after_wake : 20) : 0);
-        
+#if (FORCE_FRAM_VALS)
             fram_data.event_inteval=20;
             fram_data.event_max_limits = 0xF0;
             fram_data.serial_number = DEVICE_ID;
@@ -793,11 +810,13 @@ void main(void)
             fram_data.sleep_min_interval = 50;
             fram_data.u8_POLmethod = OUT_POL;
             fram_data.u8_voltsISL9122 = 0;
-        
+#endif
+#if (HAVE_ISL9122)  
             if (fram_data.u8_voltsISL9122 >= 72 && fram_data.u8_voltsISL9122 <= 132)
 		    {// // write fram_data.u8_voltsISL9122 to addr 0x18, reg 0x11
 		    };
-			
+#endif	
+#if (!FORCE_TOGGLE)		
 		    if (fram_data.u8_POLmethod == OUT_POL) {// toggle output POL_GPIO_PIN
     			nrf_gpio_cfg_output(POL_GPIO_PIN);
 			    nrf_gpio_pin_toggle(POL_GPIO_PIN);
@@ -808,9 +827,18 @@ void main(void)
 			    nrf_gpio_cfg_input(POL_GPIO_PIN, NRF_GPIO_PIN_PULLUP);
 			    u8Polarity = nrf_gpio_pin_read(POL_GPIO_PIN);
 		    }
-		    //else if (fram_data.u8_POLmethod == CMP_POL) {/* not possible on nRF design.  sleep sleep_after_wake then read ACMP0 on EFR32*/};
-            
-            if(0){
+#if (USING_MG24)
+		    else if (fram_data.u8_POLmethod == CMP_POL) {/* not possible on nRF design.  sleep sleep_after_wake then read ACMP0 on EFR32*/
+                // init ACMP0
+
+				// sleep
+				k_sleep(K_MSEC(fram_data.sleep_after_wake));
+
+				// read ACMP0
+            }
+#endif
+#endif           
+            if(ENCR_KEY_IN_FRAM){
                 for(uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
                     ecb_key[i] = fram_data.encrypted_key[i];
                 }
@@ -830,12 +858,12 @@ void main(void)
 	
 	    bt_ready();
 
-        nrf_gpio_pin_toggle(POL_GPIO_PIN);
+       if (FORCE_TOGGLE || (fram_data.u8_POLmethod == OUT_POL)) nrf_gpio_pin_toggle(POL_GPIO_PIN);
 
         updateManufacturerData();
         TX_Repeat_Counter_Init = 0;
 
-        nrf_gpio_pin_toggle(POL_GPIO_PIN);
+        if (FORCE_TOGGLE || (fram_data.u8_POLmethod == OUT_POL)) nrf_gpio_pin_toggle(POL_GPIO_PIN);
 
         // Init works for advertising and measuring data
         k_work_init(&start_advertising_worker, start_advertising);

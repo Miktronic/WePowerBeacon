@@ -23,6 +23,8 @@
 #include "app_temp_pressure.h"
 #include "app_types.h"
 
+extern uint8_t bPressureRequested;
+
 static void lps22hh_handler(const struct device *dev, const struct sensor_trigger *trig)
 {
 	//process_sample(dev);
@@ -105,15 +107,11 @@ void testing(void)
 
 #endif
 
-int app_temp_pressure_service(temp_pressure_data_t *temp_pressure_data)
+int app_temp_pressure_trigger(void)
 {
-#ifdef TESTING
-    testing();
-#else 
-	const struct device *const dev = DEVICE_DT_GET_ONE(st_lps22hh);
-	struct sensor_value pressure, temp;
+	const struct device* const dev = DEVICE_DT_GET_ONE(st_lps22hh);
 
-    if (IS_ENABLED(CONFIG_LPS22HH_TRIGGER)) {
+	if (IS_ENABLED(CONFIG_LPS22HH_TRIGGER)) {
 		struct sensor_value attr = {
 			.val1 = 1,
 		};
@@ -122,17 +120,20 @@ int app_temp_pressure_service(temp_pressure_data_t *temp_pressure_data)
 			.chan = SENSOR_CHAN_ALL,
 		};
 
-		if (sensor_attr_set(dev, SENSOR_CHAN_ALL,
-				    SENSOR_ATTR_SAMPLING_FREQUENCY, &attr) < 0) {
-			printk("Cannot configure sampling rate\n");
-			return TEMP_PRESSURE_ERROR;
+		if (bPressureRequested == 0) {
+
+			if (sensor_attr_set(dev, SENSOR_CHAN_ALL,
+				SENSOR_ATTR_SAMPLING_FREQUENCY, &attr) < 0) {
+				printk("Cannot configure sampling rate\n");
+				return TEMP_PRESSURE_ERROR;
+			}
+			if (sensor_trigger_set(dev, &trig, lps22hh_handler) < 0) {
+				printk("Cannot configure trigger\n");
+				return TEMP_PRESSURE_ERROR;
+			}
+			printk("Configured for triggered collection at %u Hz\n",
+				attr.val1);
 		}
-		if (sensor_trigger_set(dev, &trig, lps22hh_handler) < 0) {
-			printk("Cannot configure trigger\n");
-			return TEMP_PRESSURE_ERROR;
-		}
-		printk("Configured for triggered collection at %u Hz\n",
-		       attr.val1);
 	}
 
 	if (!device_is_ready(dev)) {
@@ -140,9 +141,22 @@ int app_temp_pressure_service(temp_pressure_data_t *temp_pressure_data)
 		return TEMP_PRESSURE_ERROR;
 	}
 
-    printk("Temp & Pressure Init Success!\n");
+	printk("Temp & Pressure Init Success!\n");
+	return TEMP_PRESSURE_SUCCESS;
+}
 
-    k_msleep(10);
+int app_temp_pressure_service(temp_pressure_data_t *temp_pressure_data)
+{
+#ifdef TESTING
+    testing();
+#else 
+	const struct device *const dev = DEVICE_DT_GET_ONE(st_lps22hh);
+	struct sensor_value pressure, temp;
+
+    if (TEMP_PRESSURE_ERROR == app_temp_pressure_trigger()) return TEMP_PRESSURE_ERROR;
+
+	if (bPressureRequested == 0) k_msleep(10);
+	bPressureRequested = 0; // used the trigger.
 
 	if (sensor_sample_fetch(dev) < 0) {
 		printk("Sensor sample update error\n");
