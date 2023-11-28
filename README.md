@@ -1,12 +1,20 @@
 # WePowerBeacon
 
-V1.2 - Implementation to trigger the POL pin, add the frame counter to the packet, advertise MAX_Limits frames and sleep for minimum_time and then update the sensor data and manufacturer data.
+### Install nRF Connect SDK
 
-Data format: [50 57][4B B1 38 7E 8B D4 F8 5A AC 5E E4 0E 6D 37 8B CD][02] [03 00][ 00 4F]
+- First install the nRF Command Line Tools 
+- Install the nRF Connect for Desktop
+- Open the nRf Connect for Desktop and install Toolchain manager
+- The source code was developed with nRF Connect SDK v2.4.2. 
+- Install the VS code extensions for nRF Connect SDK
 
-[50 57]: "UUID" <br />
-[4B B1 38 7E 8B D4 F8 5A AC 5E E4 0E 6D 37 8B CD]: "Encrypted data", <br />
-[02]: "Frame counter", <br />
-[03 00]: "device id", <br />
-[00]: "status", <br />
-[4F]: "rfuIndex", <br />
+### Build the code
+
+- Open the beacon folder on the vscode
+- Go to nRF Connect extension
+- Create new build configuration
+- set the wp_rev1 in the Custom boards
+- To print the logs, choose the prj_logs.conf in the Configurations. </br>
+For the product version, choose the prj.conf
+- Click Build
+
