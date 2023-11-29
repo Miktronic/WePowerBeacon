@@ -37,7 +37,7 @@
 
 // conditional compile options
 #define FORCE_TOGGLE (1)
-#define FORCE_FRAM_VALS (0)
+#define FORCE_FRAM_VALS (1)
 #define HAVE_ISL9122 (0)
 #define USING_MG24 (0)
 #define ENCR_KEY_IN_FRAM (0)
@@ -64,7 +64,7 @@
 #define PACKET_INTERVAL_MIN (10) // ms repeat rate
 #define PACKET_INTERVAL_MAX (50) // ms repeat rate
 
-#define LOGS (0) // if printk doesn't handle it use if(LOGS) printk();
+#define LOGS (1) // if printk doesn't handle it use if(LOGS) printk();
 
 #define POL_GPIO_PIN                    13
 
@@ -177,10 +177,10 @@ static struct bt_data ad[] = {
 
 static void init_gpio_fn(void)
 {
-    #if (FORCE_TOGGLE)
+    if (FORCE_TOGGLE){
     	nrf_gpio_cfg_output(POL_GPIO_PIN); 
         nrf_gpio_pin_toggle(POL_GPIO_PIN);
-    #endif 
+    }
 }
 
 SYS_INIT(init_gpio_fn, POST_KERNEL, 0); // Define the Initi function of System
@@ -760,7 +760,7 @@ void main(void)
 #endif
 
 	// if VEXT10 > 0.165V we have external power
-    if (vext10_mv > 1700){
+    if (vext10_mv > 3299){
         //Init UART
         init_uart();
         //Process the UART Command
@@ -775,8 +775,29 @@ void main(void)
         if(app_fram_read_data(&fram_data) == FRAM_SUCCESS)
         {
             // Success! Add it to the payload
+            serial_number = (fram_data.serial_number?(fram_data.serial_number<0xFFFF? fram_data.serial_number:DEVICE_ID):DEVICE_ID);
+		    type = (fram_data.type ? (fram_data.type < 0xFF ? fram_data.type : 1) : 1);
+		    event_inteval = (fram_data.event_inteval >= PACKET_INTERVAL_MIN ? (fram_data.event_inteval <= PACKET_INTERVAL_MAX ? fram_data.event_inteval : PACKET_INTERVAL_MAX) : PACKET_INTERVAL_MIN); //
+		    event_max_limits = (fram_data.event_max_limits >= 3 ? (fram_data.event_max_limits < 0xF0 ? fram_data.event_max_limits : 3) : 0xF0);
+		    sleep_min_interval = (fram_data.sleep_min_interval >= 50 ? (fram_data.sleep_min_interval < 0xFFFF ? fram_data.sleep_min_interval : 0xFFF0) : 50);
+		    sleep_after_wake = (fram_data.sleep_after_wake ? (fram_data.sleep_after_wake < 0xFFFF ? fram_data.sleep_after_wake : 20) : 0);
+        }
+        else
+        {
+		     fram_data.event_counter = 0;
+        }
 
-            if (LOGS){
+#if (FORCE_FRAM_VALS)
+        fram_data.event_inteval=20;
+        fram_data.event_max_limits = 0xF0;
+        fram_data.serial_number = DEVICE_ID;
+        fram_data.sleep_after_wake = 0;
+        fram_data.sleep_min_interval = 50;
+        fram_data.u8_POLmethod = OUT_POL;
+        fram_data.u8_voltsISL9122 = 0;
+#endif
+
+        if (LOGS){
                 printk(">> ------- Writing FRAM Data -------\n");
 		        printk(">>[FRAM INFO]->Event Counter: 0x%08X\n", fram_data.event_counter);
 		        printk(">>[FRAM INFO]->Serial Number: 0x%08X\n", fram_data.serial_number);
@@ -794,59 +815,38 @@ void main(void)
 		        printk("\n");
 		        printk(">>[FRAM INFO]->TX dBM 10: %d\n", fram_data.tx_dbm_10);
 		        printk(">>[FRAM INFO]->cName: %s\n", fram_data.cName);
-            }
-		
-            serial_number = (fram_data.serial_number?(fram_data.serial_number<0xFFFF? fram_data.serial_number:DEVICE_ID):DEVICE_ID);
-		    type = (fram_data.type ? (fram_data.type < 0xFF ? fram_data.type : 1) : 1);
-		    event_inteval = (fram_data.event_inteval >= PACKET_INTERVAL_MIN ? (fram_data.event_inteval <= PACKET_INTERVAL_MAX ? fram_data.event_inteval : PACKET_INTERVAL_MAX) : PACKET_INTERVAL_MIN); //
-		    event_max_limits = (fram_data.event_max_limits >= 3 ? (fram_data.event_max_limits < 0xF0 ? fram_data.event_max_limits : 3) : 0xF0);
-		    sleep_min_interval = (fram_data.sleep_min_interval >= 50 ? (fram_data.sleep_min_interval < 0xFFFF ? fram_data.sleep_min_interval : 0xFFF0) : 50);
-		    sleep_after_wake = (fram_data.sleep_after_wake ? (fram_data.sleep_after_wake < 0xFFFF ? fram_data.sleep_after_wake : 20) : 0);
-#if (FORCE_FRAM_VALS)
-            fram_data.event_inteval=20;
-            fram_data.event_max_limits = 0xF0;
-            fram_data.serial_number = DEVICE_ID;
-            fram_data.sleep_after_wake = 0;
-            fram_data.sleep_min_interval = 50;
-            fram_data.u8_POLmethod = OUT_POL;
-            fram_data.u8_voltsISL9122 = 0;
-#endif
+        }
 #if (HAVE_ISL9122)  
-            if (fram_data.u8_voltsISL9122 >= 72 && fram_data.u8_voltsISL9122 <= 132)
-		    {// // write fram_data.u8_voltsISL9122 to addr 0x18, reg 0x11
-		    };
+        if (fram_data.u8_voltsISL9122 >= 72 && fram_data.u8_voltsISL9122 <= 132)
+		{// // write fram_data.u8_voltsISL9122 to addr 0x18, reg 0x11
+		};
 #endif	
 #if (!FORCE_TOGGLE)		
-		    if (fram_data.u8_POLmethod == OUT_POL) {// toggle output POL_GPIO_PIN
-    			nrf_gpio_cfg_output(POL_GPIO_PIN);
-			    nrf_gpio_pin_toggle(POL_GPIO_PIN);
-		    }
-		    else if (fram_data.u8_POLmethod == IN_POL) {// sleep sleep_after_wake then read GPIO --> u8Polarity
-                // sleep sleep_after_wake
-                k_sleep(K_MSEC(fram_data.sleep_after_wake));
-			    nrf_gpio_cfg_input(POL_GPIO_PIN, NRF_GPIO_PIN_PULLUP);
-			    u8Polarity = nrf_gpio_pin_read(POL_GPIO_PIN);
-		    }
+		if (fram_data.u8_POLmethod == OUT_POL) {// toggle output POL_GPIO_PIN
+    		nrf_gpio_cfg_output(POL_GPIO_PIN);
+			nrf_gpio_pin_toggle(POL_GPIO_PIN);
+		}
+		else if (fram_data.u8_POLmethod == IN_POL) {// sleep sleep_after_wake then read GPIO --> u8Polarity
+            // sleep sleep_after_wake
+            k_sleep(K_MSEC(fram_data.sleep_after_wake));
+			nrf_gpio_cfg_input(POL_GPIO_PIN, NRF_GPIO_PIN_PULLUP);
+			u8Polarity = nrf_gpio_pin_read(POL_GPIO_PIN);
+		}
 #if (USING_MG24)
-		    else if (fram_data.u8_POLmethod == CMP_POL) {/* not possible on nRF design.  sleep sleep_after_wake then read ACMP0 on EFR32*/
+		else if (fram_data.u8_POLmethod == CMP_POL) {/* not possible on nRF design.  sleep sleep_after_wake then read ACMP0 on EFR32*/
                 // init ACMP0
 
 				// sleep
-				k_sleep(K_MSEC(fram_data.sleep_after_wake));
+			k_sleep(K_MSEC(fram_data.sleep_after_wake));
 
-				// read ACMP0
-            }
+			// read ACMP0
+        }
 #endif
 #endif           
-            if(ENCR_KEY_IN_FRAM){
-                for(uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
-                    ecb_key[i] = fram_data.encrypted_key[i];
-                }
+        if(ENCR_KEY_IN_FRAM){
+            for(uint8_t i = 0; i < ENCRYPTED_KEY_NUM_BYTES; i++){
+                ecb_key[i] = fram_data.encrypted_key[i];
             }
-        }
-        else
-        {
-		     fram_data.event_counter = 0;
         }
     
         // Init and run the BLE

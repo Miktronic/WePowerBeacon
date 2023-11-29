@@ -20,6 +20,7 @@ typedef struct
     int16_t pressure;
 } temp_pressure_data_t;
 
+int app_temp_pressure_trigger(void);
 int app_temp_pressure_service(temp_pressure_data_t *temp_pressure_data);
 
 #endif /* APP_TEMP_PRESSURE_H */
